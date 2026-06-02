@@ -109,3 +109,21 @@ class AuditRecordRow(Base):
     prev_hash: Mapped[str] = mapped_column(String(64))
     record_hash: Mapped[str] = mapped_column(String(64), index=True)
     event: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class HITLRequestRow(Base):
+    """A pending/decided human-approval request. Approving mints a scoped,
+    single-use token; `token_jti` records the issued nonce for traceability."""
+
+    __tablename__ = "hitl_requests"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    agent_id: Mapped[str] = mapped_column(String(64), index=True)
+    tenant: Mapped[str] = mapped_column(String(128), index=True)
+    action: Mapped[str] = mapped_column(String(255))
+    resource: Mapped[str] = mapped_column(String(1024))
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    approver: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    token_jti: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

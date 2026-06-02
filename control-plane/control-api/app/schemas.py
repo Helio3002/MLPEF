@@ -91,3 +91,33 @@ class ToolOut(BaseModel):
     name: str
     json_schema: dict[str, JsonValue]
     default_allow: bool
+
+
+class HITLRequestCreate(BaseModel):
+    action: str
+    resource: str
+
+
+class HITLRequestOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    agent_id: str
+    tenant: str
+    action: str
+    resource: str
+    status: str
+    approver: str | None = None
+    requested_at: datetime
+    decided_at: datetime | None = None
+
+
+class HITLApprovalOut(BaseModel):
+    hitl_request_id: str
+    token: str
+    expires_at: int
+
+
+class PublicKeyOut(BaseModel):
+    algorithm: str
+    public_key_pem: str

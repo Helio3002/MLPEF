@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -17,10 +18,12 @@ from common import (
     ChainVerification,
     ConfigBundle,
     PolicyProfile,
+    mint_hitl_token,
     now_epoch,
     seal_event,
     verify_chain,
 )
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -31,6 +34,7 @@ from .models import (
     AdminUser,
     Agent,
     AuditRecordRow,
+    HITLRequestRow,
     PolicyProfileRow,
     Tool,
     utcnow,
@@ -310,3 +314,70 @@ def list_audit(
 def verify_audit_chain(db: Session) -> ChainVerification:
     rows = db.execute(select(AuditRecordRow).order_by(AuditRecordRow.seq.asc())).scalars().all()
     return verify_chain([_row_to_record(r) for r in rows])
+
+
+# --------------------------------------------------------------------------- #
+# HITL approval requests + token minting
+# --------------------------------------------------------------------------- #
+def create_hitl_request(
+    db: Session, *, agent_id: str, tenant: str, action: str, resource: str
+) -> HITLRequestRow:
+    row = HITLRequestRow(
+        id=uuid.uuid4().hex,
+        agent_id=agent_id,
+        tenant=tenant,
+        action=action,
+        resource=resource,
+        status="pending",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_hitl_request(db: Session, request_id: str) -> HITLRequestRow | None:
+    return db.get(HITLRequestRow, request_id)
+
+
+def list_hitl_requests(db: Session, *, status: str | None = None) -> list[HITLRequestRow]:
+    stmt = select(HITLRequestRow).order_by(HITLRequestRow.requested_at.asc())
+    if status is not None:
+        stmt = stmt.where(HITLRequestRow.status == status)
+    return list(db.execute(stmt).scalars().all())
+
+
+def approve_hitl_request(
+    db: Session, row: HITLRequestRow, *, approver_id: str, private_key: Ed25519PrivateKey
+) -> tuple[str, int]:
+    issued_at = now_epoch()
+    ttl = settings.hitl_token_ttl_seconds
+    jti = secrets.token_urlsafe(32)
+    token = mint_hitl_token(
+        private_key,
+        subject=row.agent_id,
+        tenant=row.tenant,
+        action=row.action,
+        resource=row.resource,
+        hitl_request_id=row.id,
+        approver=approver_id,
+        issued_at=issued_at,
+        ttl_seconds=ttl,
+        jti=jti,
+    )
+    row.status = "approved"
+    row.approver = approver_id
+    row.token_jti = jti
+    row.decided_at = utcnow()
+    db.commit()
+    db.refresh(row)
+    return token, issued_at + ttl
+
+
+def deny_hitl_request(db: Session, row: HITLRequestRow, *, approver_id: str) -> HITLRequestRow:
+    row.status = "denied"
+    row.approver = approver_id
+    row.decided_at = utcnow()
+    db.commit()
+    db.refresh(row)
+    return row

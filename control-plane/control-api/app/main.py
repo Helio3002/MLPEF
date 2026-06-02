@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from .routers import agents, audit, auth, profiles, tools
+from .routers import agents, audit, auth, hitl, profiles, tools
 
 
 def create_app() -> FastAPI:
@@ -14,6 +14,7 @@ def create_app() -> FastAPI:
     app.include_router(profiles.router)
     app.include_router(tools.router)
     app.include_router(audit.router)
+    app.include_router(hitl.router)
 
     @app.get("/healthz", tags=["health"])
     def healthz() -> dict[str, str]:

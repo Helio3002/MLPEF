@@ -1,14 +1,29 @@
 # Policies (OPA / Rego)
 
-Layer 2 policy lives here. Populated in **Phase 5**.
+Layer 2 policy lives here (authored in **Phase 5**).
 
-Plan:
+- `authz.rego` — default-deny ABAC: classifies each action as `deny` / `allow` /
+  `hitl_required` from the agent's resolved profile (tool allowlist + HITL rules).
+- `authz_test.rego` — `opa test` cases that pin the semantics.
 
-- Author ABAC policy in Rego with a `default allow = false` floor.
-- `opa test` runs the policy unit tests in CI (full OPA, off the hot path).
-- `opa build -t wasm` compiles the policy to WASM; the proxy evaluates it
-  **in-process, in-memory** on the decision hot path (no network hop), to meet
-  the < 10 ms p99 decision-path budget.
+Run / build (in the Codespace, with `opa` installed):
+
+```bash
+opa test policies/                                 # policy unit tests
+opa build -t wasm -e mlpef/authz/decision policies/   # -> bundle.tar.gz (policy.wasm)
+```
+
+The compiled `policy.wasm` is evaluated **in-process** on the decision hot path
+(no network hop) to meet the < 10 ms p99 budget. Until that artifact is wired in
+(Phase 8), the data-plane `NativePolicyEngine` (`data-plane/layer2_policy/`)
+provides the identical default-deny classification in pure Python behind the same
+`PolicyEngine` interface; `authz_test.rego` and the Python tests assert the same
+cases, keeping them in lockstep.
+
+The Ed25519 signature check on the HITL approval token is **not** done in
+Rego/WASM (OPA cannot verify signatures): the proxy verifies the token in Python
+(`common.verify_hitl_token`) after the policy classifies an action as
+`hitl_required`.
 
 `PolicyProfile.rego_policy_ref` (see `common/profiles.py`) holds the logical name
 of the policy a profile uses, e.g. `mlpef.authz/default_deny`. The default-deny

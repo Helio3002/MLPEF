@@ -49,7 +49,7 @@ the *subject* of a decision, never an *input* to one.
 | **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | IMPLEMENTED (P3) |
 | **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PLANNED (P7) |
 | **D**enial of service | Fail-closed on timeout/exception; sandbox cgroup limits; warm-pool bounds | Pipeline / L3 | PARTIAL — fail-closed error model IMPLEMENTED (P1) |
-| **E**levation of privilege | Default-deny ABAC; per-tool allowlist; HITL token for state-altering actions | L2 | PARTIAL — HITL token lib IMPLEMENTED (P1) |
+| **E**levation of privilege | Default-deny ABAC; per-tool allowlist; HITL token for state-altering actions | L2 | PARTIAL — default-deny + HITL IMPLEMENTED (P1/P5) |
 
 ## 4. OWASP LLM Top 10 mapping
 
@@ -58,7 +58,7 @@ the *subject* of a decision, never an *input* to one.
 | LLM01 Prompt Injection | Injected instructions try to drive tool calls | L1 allowlist + L2 default-deny bound the blast radius; L4 neutralizes output-as-instructions | PARTIAL — L1 allowlist/jail IMPLEMENTED (P4); L2/L4 [P5/P7] |
 | LLM02 Insecure Output Handling | Tool output treated as commands | L4 treats output as untrusted data | PLANNED (P7) |
 | LLM06 Sensitive Information Disclosure | Secrets/PII in tool output | L4 secret + PII scanning | PLANNED (P7) |
-| **LLM08 Excessive Agency** | **Agent attempts actions beyond its grant** | **L1 allowlist + L2 default-deny ABAC + HITL gate + L3 containment** | **PARTIAL — L1 allowlist + token gate IMPLEMENTED (P1/P4)** |
+| **LLM08 Excessive Agency** | **Agent attempts actions beyond its grant** | **L1 allowlist + L2 default-deny ABAC + HITL gate + L3 containment** | **PARTIAL — L1 allowlist + L2 default-deny + HITL IMPLEMENTED (P1/P4/P5)** |
 | LLM10 Model Theft / abuse of tools | Tool misuse for exfiltration | L2 policy + L3 egress allowlist + L4 filtering | PLANNED (P5/P6/P7) |
 
 ## 5. Named threat scenarios
@@ -102,8 +102,8 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-2 | Tool/argument **allowlist** from resolved profile | L1 | T-1 (LLM08) | **[IMPL][TEST]** (P4) |
 | C-3 | Lexical path jail + traversal/encoding rejection | L1 | path-traversal tool abuse | **[IMPL][TEST]** (P4) · symlink [L3/P6] |
 | C-4 | `argv`-only construction + metacharacter rejection | L1 | command injection | **[IMPL][TEST]** (P4) |
-| C-5 | Default-deny ABAC (`default allow = false`) | L2 | T-1, EoP | [P5] |
-| C-6 | **HITL token**: signed, scoped, single-use, expiring | L2 | T-2, T-3, EoP | **[IMPL][TEST]** · wiring [P5] |
+| C-5 | Default-deny ABAC (`default allow = false`) | L2 | T-1, EoP | **[IMPL][TEST]** native+rego (P5) · WASM build [P8] |
+| C-6 | **HITL token**: signed, scoped, single-use, expiring | L2 | T-2, T-3, EoP | **[IMPL][TEST]** (P1) · L2 + control-plane mint wired (P5) |
 | C-7 | Asymmetric signing (proxy holds public key only) | L2 | forgery under breach | **[IMPL][TEST]** |
 | C-8 | Sandbox hardening (ro-rootfs, cap-drop, seccomp, userns) | L3 | containment, EoP | [P6] |
 | C-9 | cgroup CPU/mem/pids limits + timeout | L3 | DoS, runaway tools | [P6] |
@@ -145,6 +145,8 @@ defense-in-depth stack.
 | R-19 | The chain is tamper-**evident**, not tamper-**proof** — an attacker with store-write access could rewrite the entire chain consistently. | MEDIUM | Ship to append-only/WORM storage; publish periodic anchor hashes off-system (notary / transparency log). | Documented |
 | R-20 | Layer 1's path jail is **lexical** (no I/O): it does not resolve symlinks, so a symlink *inside* the jail pointing outside is not caught at L1. | MEDIUM | True path containment is enforced by the L3 sandbox (read-only rootfs, jailed mount, no symlink-follow); L1 stays I/O-free for the hot path. | By design → P6 |
 | R-21 | L1 URL validation is structural only (scheme/host/encoding); it does not enforce a host/egress allowlist. | LOW | Host allowlist (L2 policy) + egress allowlist (L3 sandbox) enforce destination control. | Open → P5/P6 |
+| R-22 | Dev signing key is **ephemeral** when `MLPEF_HITL_PRIVATE_KEY_PEM` is unset — tokens do not survive a control-plane restart, and the key is not backed up. | LOW (dev) | Supply the key from a secret manager / HSM in production (see R-8); ephemeral only for local dev, with a startup warning. | Mitigated + documented |
+| R-23 | The native L2 engine and the Rego/WASM policy must stay semantically in sync; drift could allow/deny differently in dev vs prod. | MEDIUM | `authz_test.rego` and the Python L2 tests assert the same cases; a CI cross-check evaluating both over shared fixtures is the durable fix. | Open → P8/P11 |
 
 ## 8. Change log
 
@@ -173,3 +175,12 @@ defense-in-depth stack.
   allowlist + metacharacter rejection for literal fields (C-1…C-4) — all
   fail-closed, with adversarial tests for each. Added residual risks R-20 (lexical
   jail; symlink containment at L3) and R-21 (URL host/egress allowlist at L2/L3).
+- **Phase 5:** Layer 2 policy + HITL. Implemented default-deny ABAC as Rego
+  (`policies/authz.rego` + `opa test`) and an identical native in-process
+  `PolicyEngine` (C-5), and wired the HITL approval-token verifier into Layer 2 —
+  a permitted destructive action needs a scoped/single-use/expiring token, with
+  replay/scope/expiry denials flagged as security events (C-6). Added the
+  control-plane HITL queue (agent opens request → approver approves → Ed25519
+  token minted, or deny) + public-key endpoint, with an end-to-end mint→verify
+  test. Added residual risks R-22 (ephemeral dev signing key) and R-23 (native↔WASM
+  policy parity).
