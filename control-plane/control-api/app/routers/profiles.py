@@ -4,13 +4,12 @@ mutating endpoints expose the affected-agent count (the UI shows it before save)
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
+from common import PolicyProfile
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
-from common import PolicyProfile
 
 from .. import crud
 from ..db import get_db
@@ -26,7 +25,7 @@ _WRITE_ROLES = ("superadmin", "security-reviewer")
 def _to_out(db: Session, profile: PolicyProfile) -> ProfileOut:
     row = crud.get_profile_row(db, profile.profile_id)
     affected = crud.count_agents_on_profile(db, profile.profile_id)
-    updated_at = row.updated_at if row is not None else datetime.now(timezone.utc)
+    updated_at = row.updated_at if row is not None else datetime.now(UTC)
     return ProfileOut(profile=profile, agents_affected=affected, updated_at=updated_at)
 
 

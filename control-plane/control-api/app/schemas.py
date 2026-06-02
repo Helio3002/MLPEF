@@ -9,9 +9,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
-
 from common import PolicyProfile
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 Role = Literal["superadmin", "security-reviewer", "approver", "read-only"]
 

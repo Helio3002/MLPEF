@@ -6,11 +6,6 @@ import base64
 import json
 
 import pytest
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
-
 from common import (
     InMemoryNonceStore,
     TokenExpired,
@@ -20,6 +15,10 @@ from common import (
     TokenScopeMismatch,
     mint_hitl_token,
     verify_hitl_token,
+)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
 )
 
 Keypair = tuple[Ed25519PrivateKey, Ed25519PublicKey]

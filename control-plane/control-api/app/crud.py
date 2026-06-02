@@ -8,12 +8,11 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime, timedelta
 
 from common import ConfigBundle, PolicyProfile, now_epoch
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from . import security
 from .config import settings
@@ -23,7 +22,7 @@ from .models import AdminSession, AdminUser, Agent, PolicyProfileRow, Tool, utcn
 def _as_aware_utc(dt: datetime) -> datetime:
     # SQLite returns naive datetimes even for tz-aware columns; normalize so
     # expiry comparisons work the same on SQLite and Postgres.
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 # --------------------------------------------------------------------------- #
@@ -66,7 +65,7 @@ def get_admin_by_session(db: Session, token_hash: str) -> AdminUser | None:
     session = db.get(AdminSession, token_hash)
     if session is None:
         return None
-    if _as_aware_utc(session.expires_at) < datetime.now(timezone.utc):
+    if _as_aware_utc(session.expires_at) < datetime.now(UTC):
         return None
     return db.get(AdminUser, session.admin_id)
 

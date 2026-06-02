@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import pytest
+from common import InMemoryNonceStore, generate_keypair
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
 )
-
-from common import InMemoryNonceStore, generate_keypair
 
 # A fixed reference time so token-expiry tests are deterministic.
 NOW = 1_700_000_000

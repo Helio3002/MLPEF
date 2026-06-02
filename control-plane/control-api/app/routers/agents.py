@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from common import ConfigBundle
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
-from common import ConfigBundle
 
 from .. import crud, security
 from ..db import get_db

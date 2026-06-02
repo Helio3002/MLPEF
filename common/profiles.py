@@ -17,12 +17,12 @@ safe-by-default profile the registration flow assigns.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ResourceKind(str, Enum):
+class ResourceKind(StrEnum):
     PATH = "path"
     URL = "url"
     CUSTOM = "custom"
