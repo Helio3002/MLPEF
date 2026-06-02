@@ -1,0 +1,92 @@
+[project]
+name = "mlpef"
+version = "0.1.0"
+description = "MLPEF — a deterministic Zero Trust enforcement platform for autonomous AI agents."
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+# Phase 1 ships only `common/`. Service-specific deps (FastAPI, SQLAlchemy,
+# docker SDK, etc.) are added in their own phases to keep this slice minimal.
+dependencies = [
+    "pydantic>=2.6",
+    "cryptography>=42.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "httpx>=0.27",  # FastAPI TestClient transport
+]
+# Phase 2 — control plane service. Install with: pip install -e ".[dev,control]"
+control = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",  # Postgres driver (compose/prod); SQLite needs no driver
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+# Only `common` is real code in Phase 1. Other packages are added per phase.
+include = ["common*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["common", "tests", "control-plane/control-api"]
+# Alembic migrations/env are framework-managed; don't lint them.
+extend-exclude = ["**/alembic/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "PTH", "ANN"]
+ignore = [
+    "ANN401", # allow typing.Any where deliberately used (e.g. json.loads result)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["ANN", "S101"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Calling these in argument defaults is the intended pydantic/dataclass/FastAPI
+# idiom, not the B008 anti-pattern.
+extend-immutable-calls = [
+    "pydantic.Field",
+    "dataclasses.field",
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Security",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+disallow_any_generics = true
+# Strict type-checking is enforced on the shipped library. Tests are linted by
+# ruff but excluded from --strict to avoid brittle plugin-specific ignores.
+no_implicit_reexport = true
+files = ["common"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+# Lets `import common` resolve from the repo root without an editable install.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
