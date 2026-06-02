@@ -103,7 +103,7 @@ applicable.
 | **1** | `common/` types + signed-token lib + `THREAT_MODEL.md` skeleton | **done** |
 | **2** | Control plane core (DB, CRUD, registration, config bundle, seed) | **done** |
 | **3** | L5 audit store + integrity verification | **done** |
-| 4 | L1 validation + adversarial traversal/injection tests | pending |
+| **4** | L1 validation + adversarial traversal/injection tests | **done** |
 | 5 | L2 Rego + WASM + in-process evaluator + HITL wiring | pending |
 | 6 | L3 sandbox backend + hardening + warm pool | pending |
 | 7 | L4 output scanners + loop-injection stripping | pending |

@@ -45,7 +45,7 @@ the *subject* of a decision, never an *input* to one.
 | STRIDE | Primary control(s) | Layer | Status |
 |---|---|---|---|
 | **S**poofing | Agent credential (API key hash) → identity; admin session + RBAC | Identity | PARTIAL — IMPLEMENTED (P2); mTLS [P8] |
-| **T**ampering | Pydantic strict schemas (`extra=forbid`); signed config bundle; hash-chained audit | L1 / Pipeline / L5 | PARTIAL — strict types IMPLEMENTED (P1) |
+| **T**ampering | Strict input validation (allowlist / jail / argv-only); signed config bundle; hash-chained audit | L1 / Pipeline / L5 | PARTIAL — L1 + audit IMPLEMENTED (P1/P3/P4) |
 | **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | IMPLEMENTED (P3) |
 | **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PLANNED (P7) |
 | **D**enial of service | Fail-closed on timeout/exception; sandbox cgroup limits; warm-pool bounds | Pipeline / L3 | PARTIAL — fail-closed error model IMPLEMENTED (P1) |
@@ -55,10 +55,10 @@ the *subject* of a decision, never an *input* to one.
 
 | OWASP LLM | Relevance to MLPEF | Control | Status |
 |---|---|---|---|
-| LLM01 Prompt Injection | Injected instructions try to drive tool calls | L1 allowlist + L2 default-deny bound the blast radius; L4 neutralizes output-as-instructions | PLANNED (P4/P5/P7) |
+| LLM01 Prompt Injection | Injected instructions try to drive tool calls | L1 allowlist + L2 default-deny bound the blast radius; L4 neutralizes output-as-instructions | PARTIAL — L1 allowlist/jail IMPLEMENTED (P4); L2/L4 [P5/P7] |
 | LLM02 Insecure Output Handling | Tool output treated as commands | L4 treats output as untrusted data | PLANNED (P7) |
 | LLM06 Sensitive Information Disclosure | Secrets/PII in tool output | L4 secret + PII scanning | PLANNED (P7) |
-| **LLM08 Excessive Agency** | **Agent attempts actions beyond its grant** | **L1 allowlist + L2 default-deny ABAC + HITL gate + L3 containment** | **PARTIAL — token gate IMPLEMENTED (P1)** |
+| **LLM08 Excessive Agency** | **Agent attempts actions beyond its grant** | **L1 allowlist + L2 default-deny ABAC + HITL gate + L3 containment** | **PARTIAL — L1 allowlist + token gate IMPLEMENTED (P1/P4)** |
 | LLM10 Model Theft / abuse of tools | Tool misuse for exfiltration | L2 policy + L3 egress allowlist + L4 filtering | PLANNED (P5/P6/P7) |
 
 ## 5. Named threat scenarios
@@ -98,10 +98,10 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 
 | # | Control | Layer | Threats addressed | Status |
 |---|---|---|---|---|
-| C-1 | Strict per-tool schema, `extra=forbid` | L1 | T-1, LLM01, Tampering | [IMPL] types · [P4] per-tool |
-| C-2 | Tool/argument **allowlist** from resolved profile | L1 | T-1 (LLM08) | [P4] · schema [IMPL] |
-| C-3 | `realpath` jail + traversal rejection | L1 | path-traversal tool abuse | [P4] |
-| C-4 | `argv`-only construction, metacharacter rejection | L1 | command injection | [P4] |
+| C-1 | Strict per-tool arg spec (allowlist of fields + kinds) | L1 | T-1, LLM01, Tampering | **[IMPL][TEST]** (P4) |
+| C-2 | Tool/argument **allowlist** from resolved profile | L1 | T-1 (LLM08) | **[IMPL][TEST]** (P4) |
+| C-3 | Lexical path jail + traversal/encoding rejection | L1 | path-traversal tool abuse | **[IMPL][TEST]** (P4) · symlink [L3/P6] |
+| C-4 | `argv`-only construction + metacharacter rejection | L1 | command injection | **[IMPL][TEST]** (P4) |
 | C-5 | Default-deny ABAC (`default allow = false`) | L2 | T-1, EoP | [P5] |
 | C-6 | **HITL token**: signed, scoped, single-use, expiring | L2 | T-2, T-3, EoP | **[IMPL][TEST]** · wiring [P5] |
 | C-7 | Asymmetric signing (proxy holds public key only) | L2 | forgery under breach | **[IMPL][TEST]** |
@@ -143,6 +143,8 @@ defense-in-depth stack.
 | R-17 | The emitter→store hop is trusted to TLS; the chain detects tampering only once records are in the store, not a forged/dropped emit in transit. | MEDIUM | Authenticate the proxy to the store; optionally sign events at the emitter (reuse the token lib). Post-store edits are still detected. | Open → P8 |
 | R-18 | Whole-chain verification is O(n) — it recomputes every record. | LOW | Periodic checkpoint/anchor hashes; verify in segments. | Open |
 | R-19 | The chain is tamper-**evident**, not tamper-**proof** — an attacker with store-write access could rewrite the entire chain consistently. | MEDIUM | Ship to append-only/WORM storage; publish periodic anchor hashes off-system (notary / transparency log). | Documented |
+| R-20 | Layer 1's path jail is **lexical** (no I/O): it does not resolve symlinks, so a symlink *inside* the jail pointing outside is not caught at L1. | MEDIUM | True path containment is enforced by the L3 sandbox (read-only rootfs, jailed mount, no symlink-follow); L1 stays I/O-free for the hot path. | By design → P6 |
+| R-21 | L1 URL validation is structural only (scheme/host/encoding); it does not enforce a host/egress allowlist. | LOW | Host allowlist (L2 policy) + egress allowlist (L3 sandbox) enforce destination control. | Open → P5/P6 |
 
 ## 8. Change log
 
@@ -164,3 +166,10 @@ defense-in-depth stack.
   end-to-end tamper-detection test) and the fail-closed data-plane emitter (C-14,
   unskippable). Added residual risks R-16…R-19 (append serialization, emitter
   transport, O(n) verify, WORM/anchoring).
+- **Phase 4:** Layer 1 input validation. Implemented the profile-driven tool
+  allowlist, strict per-tool argument specs (unknown fields rejected), the lexical
+  path jail (rejects `..`, percent-encoding, backslashes, NUL/control, absolute +
+  prefix-confusion escapes), and argv-only command validation with a command
+  allowlist + metacharacter rejection for literal fields (C-1…C-4) — all
+  fail-closed, with adversarial tests for each. Added residual risks R-20 (lexical
+  jail; symlink containment at L3) and R-21 (URL host/egress allowlist at L2/L3).
