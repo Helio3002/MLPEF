@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from common import InMemoryNonceStore, load_public_key_pem, now_epoch, verify_hitl_token
+from fastapi.testclient import TestClient
 
 
 def _login(client: TestClient) -> dict[str, str]:

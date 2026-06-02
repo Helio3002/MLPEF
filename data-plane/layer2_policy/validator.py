@@ -9,8 +9,6 @@ Everything is fail-closed: any error becomes a deny `LayerDecision`.
 
 from __future__ import annotations
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 from common import (
     DenyReasonCode,
     Intent,
@@ -23,6 +21,7 @@ from common import (
     Verdict,
     verify_hitl_token,
 )
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .engine import NativePolicyEngine, PolicyEngine
 

@@ -16,6 +16,7 @@ from common import (
     mint_hitl_token,
 )
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from layer2_policy import evaluate
 
 NOW = 1_700_000_000

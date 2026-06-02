@@ -12,9 +12,8 @@ from __future__ import annotations
 import os
 import sys
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
 from common import generate_keypair, load_private_key_pem, public_key_to_pem
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 def _load() -> Ed25519PrivateKey:
