@@ -12,6 +12,7 @@ import pytest
 docker = pytest.importorskip("docker")
 
 from common import SandboxLimits  # noqa: E402 - after importorskip by design
+
 from layer3_sandbox import DockerSandboxBackend  # noqa: E402
 
 IMAGE = "busybox:latest"
