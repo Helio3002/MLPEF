@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / admin-ui
+node_modules/
+dist-ssr/
+*.local
+
+# Policy build artifacts (WASM is produced by `opa build`, never committed raw)
+*.wasm
+policies/bundle/
+
+# Secrets — never commit. Keys/tokens live in env or a secret manager.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
