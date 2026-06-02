@@ -127,7 +127,8 @@ def test_replayed_token_is_denied() -> None:
     token = _mint(priv)
     intent = _intent("fs.delete", "fs.delete", "/work/x", token=token)
 
-    assert evaluate(intent, profile, public_key=pub, nonce_store=store, now=NOW).verdict is Verdict.ALLOW
+    first = evaluate(intent, profile, public_key=pub, nonce_store=store, now=NOW)
+    assert first.verdict is Verdict.ALLOW
     replay = evaluate(intent, profile, public_key=pub, nonce_store=store, now=NOW)
     assert replay.verdict is Verdict.DENY
     assert replay.reason_code is DenyReasonCode.TOKEN_REPLAY
