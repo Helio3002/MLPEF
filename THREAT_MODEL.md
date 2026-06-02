@@ -44,7 +44,7 @@ the *subject* of a decision, never an *input* to one.
 
 | STRIDE | Primary control(s) | Layer | Status |
 |---|---|---|---|
-| **S**poofing | Agent credential (API key hash / mTLS) → identity resolution | Identity | PLANNED (P2/P8) |
+| **S**poofing | Agent credential (API key hash) → identity; admin session + RBAC | Identity | PARTIAL — IMPLEMENTED (P2); mTLS [P8] |
 | **T**ampering | Pydantic strict schemas (`extra=forbid`); signed config bundle; hash-chained audit | L1 / Pipeline / L5 | PARTIAL — strict types IMPLEMENTED (P1) |
 | **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | PLANNED (P3) |
 | **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PLANNED (P7) |
@@ -113,9 +113,9 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-13 | Append-only hash-chained audit + correlation ID | L5 | Repudiation, tamper-evidence | [P3] |
 | C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | [P3/P8] |
 | C-15 | Fail-closed orchestration (exception/timeout → deny) | Pipeline | DoS, ambiguity | [IMPL] error model · [P8] orchestrator |
-| C-16 | Identity resolution from credential | Identity | Spoofing (T-2 cross-agent) | [P2/P8] |
-| C-17 | Signed, cached, hot-reloaded config bundle | Pipeline | config tampering, availability | [P8] |
-| C-18 | Safe-by-default (deny-most) profile at registration | Control plane | T-1 for unconfigured agents | [IMPL] schema · [P2] flow |
+| C-16 | Identity resolution from credential; admin RBAC | Identity | Spoofing (T-2 cross-agent) | [IMPL] (P2) · mTLS [P8] |
+| C-17 | Config bundle (etag + version) + cache/hot-reload + signing | Pipeline | config tampering, availability | [IMPL] endpoint+etag (P2) · cache/sign [P8] |
+| C-18 | Safe-by-default (deny-most) profile at registration | Control plane | T-1 for unconfigured agents | [IMPL] schema (P1) + flow (P2) |
 
 ## 7. Residual risk register
 
@@ -134,6 +134,11 @@ defense-in-depth stack.
 | R-8 | Control-plane **signing key** compromise lets an attacker mint approval tokens. | HIGH | Store in secret manager/HSM; rotate; never on the proxy; restrict minting RBAC. | Open → P2 |
 | R-9 | The LLM remains attacker-controlled by design. | (by design) | All guarantees are deterministic and downstream of the model; never trust model output as a decision input. | Accepted |
 | R-10 | Side/covert channels out of the sandbox (timing, resource). | LOW | cgroup limits; minimal egress; document. | Accepted → P6 |
+| R-11 | Admin session bearer tokens: no rotation/CSRF protection yet; theft replays until expiry. | MEDIUM | Short TTL; HTTPS-only; rotation + CSRF/SameSite handling with the UI. | Open → P10 |
+| R-12 | Config bundle is not yet cryptographically signed; the proxy trusts transport (TLS) only. | MEDIUM | Sign the bundle with the control-plane key (reuse token lib); proxy verifies. | Open → P8 |
+| R-13 | Seed uses default admin password `admin` if `MLPEF_ADMIN_PASSWORD` is unset. | HIGH (ops) | Seed warns loudly; deploy docs require setting it; no default in compose/prod. | Mitigated + documented |
+| R-14 | Agent API keys are stored as plain SHA-256 (no slow hash). | LOW | Acceptable for 256-bit random keys (no brute-force surface); a slow hash would be required only for low-entropy secrets. | Accepted |
+| R-15 | `Agent.tenant` and `PolicyProfile.tenant` are not enforced to match; an admin can assign a cross-tenant profile. | LOW | Enforce tenant alignment at registration/assignment in P8; RBAC already gates who can assign. | Open → P8 |
 
 ## 8. Change log
 
@@ -141,3 +146,10 @@ defense-in-depth stack.
   and the threat→control matrix. Implemented and adversarially tested the HITL
   token control (C-6, C-7) and the fail-closed error→decision model (C-15
   foundation). Recorded residual risks R-1…R-10.
+- **Phase 2:** Control-plane core. Implemented identity resolution + admin RBAC
+  (C-16), the config-bundle endpoint with etag/version (C-17), and the
+  safe-by-default registration flow (C-18). Credentials stored hashed (PBKDF2 for
+  admin passwords, SHA-256 for agent keys); config-bundle pull is fail-closed
+  (denies on missing profile / bad credential). Added residual risks R-11…R-15
+  (session-token hardening, bundle signing, default password, key hashing,
+  tenant alignment).

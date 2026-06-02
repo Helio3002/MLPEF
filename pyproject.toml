@@ -16,6 +16,15 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.4",
     "mypy>=1.9",
+    "httpx>=0.27",  # FastAPI TestClient transport
+]
+# Phase 2 — control plane service. Install with: pip install -e ".[dev,control]"
+control = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",  # Postgres driver (compose/prod); SQLite needs no driver
 ]
 
 [build-system]
@@ -29,7 +38,9 @@ include = ["common*"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["common", "tests"]
+src = ["common", "tests", "control-plane/control-api"]
+# Alembic migrations/env are framework-managed; don't lint them.
+extend-exclude = ["**/alembic/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "PTH", "ANN"]
@@ -38,12 +49,24 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ANN", "S101"]
+"**/tests/**" = ["ANN", "S101"]
 
 [tool.ruff.lint.flake8-bugbear]
-# Calling Field()/field() in argument defaults is the intended pydantic/dataclass
+# Calling these in argument defaults is the intended pydantic/dataclass/FastAPI
 # idiom, not the B008 anti-pattern.
-extend-immutable-calls = ["pydantic.Field", "dataclasses.field"]
+extend-immutable-calls = [
+    "pydantic.Field",
+    "dataclasses.field",
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Security",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+]
 
 [tool.mypy]
 python_version = "3.12"
