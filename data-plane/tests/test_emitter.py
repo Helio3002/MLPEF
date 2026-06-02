@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from common import (
     AuditEvent,
     AuditFailure,
@@ -14,6 +13,7 @@ from common import (
     PipelineResult,
     Verdict,
 )
+
 from layer5_audit import Auditor, InMemoryAuditSink
 
 
