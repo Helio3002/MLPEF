@@ -7,10 +7,10 @@ string values are part of the wire/audit contract — change them deliberately.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class Verdict(str, Enum):
+class Verdict(StrEnum):
     """Outcome of a single layer or the whole pipeline."""
 
     ALLOW = "allow"
@@ -22,7 +22,7 @@ class Verdict(str, Enum):
     HITL_REQUIRED = "hitl_required"
 
 
-class LayerName(str, Enum):
+class LayerName(StrEnum):
     """Identifies which stage produced a decision, for the audit trace."""
 
     INGRESS = "ingress"
@@ -35,7 +35,7 @@ class LayerName(str, Enum):
     PIPELINE = "pipeline"
 
 
-class IngressSource(str, Enum):
+class IngressSource(StrEnum):
     """Which ingress adapter normalized the request into an Intent.
 
     All adapters converge on the identical five-layer pipeline; this field only
@@ -48,7 +48,7 @@ class IngressSource(str, Enum):
     SDK_SHIM = "sdk_shim"
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Residual-risk / security-event severity (mirrors THREAT_MODEL.md)."""
 
     INFO = "info"
@@ -58,7 +58,7 @@ class Severity(str, Enum):
     CRITICAL = "critical"
 
 
-class DenyReasonCode(str, Enum):
+class DenyReasonCode(StrEnum):
     """Stable, machine-readable reason for a deny/HITL outcome.
 
     Grouped by the layer that most commonly raises them. Dashboards aggregate on

@@ -9,11 +9,6 @@ These map directly to named threats in THREAT_MODEL.md:
 from __future__ import annotations
 
 import pytest
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
-
 from common import (
     InMemoryNonceStore,
     TokenInvalidSignature,
@@ -22,6 +17,10 @@ from common import (
     generate_keypair,
     mint_hitl_token,
     verify_hitl_token,
+)
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
 )
 
 Keypair = tuple[Ed25519PrivateKey, Ed25519PublicKey]

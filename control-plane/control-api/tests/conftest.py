@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from common import default_locked_down_profile
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,7 +14,6 @@ from sqlalchemy.pool import StaticPool
 from app import crud
 from app.db import Base, get_db
 from app.main import create_app
-from common import default_locked_down_profile
 
 
 @pytest.fixture

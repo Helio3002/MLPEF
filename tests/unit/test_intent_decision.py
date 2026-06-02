@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from common import (
     DenyReasonCode,
     IngressSource,
@@ -15,6 +13,7 @@ from common import (
     PipelineResult,
     Verdict,
 )
+from pydantic import ValidationError
 
 
 def _intent() -> Intent:
@@ -48,7 +47,7 @@ def test_intent_rejects_unknown_fields() -> None:
 def test_intent_is_frozen() -> None:
     intent = _intent()
     with pytest.raises((ValidationError, TypeError)):
-        setattr(intent, "action", "fs.delete")
+        intent.action = "fs.delete"
 
 
 def test_layer_decision_helpers() -> None:

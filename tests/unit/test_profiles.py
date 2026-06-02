@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from common import (
     ConfigBundle,
     PolicyProfile,
     SandboxLimits,
     default_locked_down_profile,
 )
+from pydantic import ValidationError
 
 
 def test_default_profile_is_deny_most() -> None:
