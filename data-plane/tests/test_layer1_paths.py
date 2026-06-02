@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from common.errors import PathTraversalAttempt, ValidationFailure
+
 from layer1_validation.checks import canonicalize_and_jail
 
 JAIL = "/work/agent"

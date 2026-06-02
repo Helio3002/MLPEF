@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from common.errors import CommandInjectionAttempt
+
 from layer1_validation.checks import validate_argv, validate_literal
 
 

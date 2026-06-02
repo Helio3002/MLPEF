@@ -10,10 +10,10 @@ are reference tools used to exercise Layer 1.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class ArgKind(str, Enum):
+class ArgKind(StrEnum):
     PATH = "path"  # jailed, lexically canonicalized
     COMMAND = "command"  # argv list, allowlisted program
     URL = "url"  # structural http(s) validation
