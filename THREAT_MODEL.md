@@ -47,7 +47,7 @@ the *subject* of a decision, never an *input* to one.
 | **S**poofing | Agent credential (API key hash) → identity; admin session + RBAC | Identity | PARTIAL — IMPLEMENTED (P2); mTLS [P8] |
 | **T**ampering | Strict input validation (allowlist / jail / argv-only); signed config bundle; hash-chained audit | L1 / Pipeline / L5 | PARTIAL — L1 + audit IMPLEMENTED (P1/P3/P4) |
 | **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | IMPLEMENTED (P3) |
-| **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PLANNED (P7) |
+| **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PARTIAL — scan/redact IMPLEMENTED (P7); not full DLP (R-4) |
 | **D**enial of service | Fail-closed on timeout/exception; sandbox cgroup limits; warm-pool bounds | Pipeline / L3 | PARTIAL — fail-closed (P1) + sandbox limits/timeout IMPLEMENTED (P6) |
 | **E**levation of privilege | Default-deny ABAC; per-tool allowlist; HITL token for state-altering actions | L2 | PARTIAL — default-deny + HITL IMPLEMENTED (P1/P5) |
 
@@ -56,8 +56,8 @@ the *subject* of a decision, never an *input* to one.
 | OWASP LLM | Relevance to MLPEF | Control | Status |
 |---|---|---|---|
 | LLM01 Prompt Injection | Injected instructions try to drive tool calls | L1 allowlist + L2 default-deny bound the blast radius; L4 neutralizes output-as-instructions | PARTIAL — L1 allowlist/jail IMPLEMENTED (P4); L2/L4 [P5/P7] |
-| LLM02 Insecure Output Handling | Tool output treated as commands | L4 treats output as untrusted data | PLANNED (P7) |
-| LLM06 Sensitive Information Disclosure | Secrets/PII in tool output | L4 secret + PII scanning | PLANNED (P7) |
+| LLM02 Insecure Output Handling | Tool output treated as commands | L4 treats output as untrusted data | PARTIAL — L4 neutralization IMPLEMENTED (P7); heuristic (R-26) |
+| LLM06 Sensitive Information Disclosure | Secrets/PII in tool output | L4 secret + PII scanning | IMPLEMENTED (P7); not full DLP (R-4) |
 | **LLM08 Excessive Agency** | **Agent attempts actions beyond its grant** | **L1 allowlist + L2 default-deny ABAC + HITL gate + L3 containment** | **PARTIAL — L1 allowlist + L2 default-deny + HITL IMPLEMENTED (P1/P4/P5)** |
 | LLM10 Model Theft / abuse of tools | Tool misuse for exfiltration | L2 policy + L3 egress allowlist + L4 filtering | PLANNED (P5/P6/P7) |
 
@@ -89,7 +89,10 @@ Untrusted content (web page, file, prior tool output) contains instructions that
 steer the agent toward harmful tool calls, or tool output is crafted to look like
 instructions. **Controls:** the same deterministic gate (L1/L2) regardless of why
 the agent wants the action; L4 neutralizes output-as-instructions before it
-returns to the agent. **Status:** PLANNED (P4/P5/P7).
+returns to the agent. **Status:** PARTIAL — L1 allowlist (P4) + L2 default-deny
+(P5) + L4 output neutralization (P7) IMPLEMENTED; neutralization is heuristic
+(R-26) and the durable guarantee is that injected text still cannot drive a tool
+call past L1/L2.
 
 ## 6. Threat → Control matrix
 
@@ -108,8 +111,8 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-8 | Sandbox hardening (ro-rootfs, cap-drop, no-new-privs, non-root, seccomp) | L3 | containment, EoP | **[IMPL][TEST]** config (P6) · live escape tests need Docker |
 | C-9 | cgroup CPU/mem/pids limits + timeout | L3 | DoS, runaway tools | **[IMPL][TEST]** (P6) |
 | C-10 | Network off (default) + egress allowlist | L3 | exfiltration | **[IMPL]** network-off (P6) · per-host egress [R-24] |
-| C-11 | Output secret/PII scan + redaction | L4 | LLM06, Info disclosure | [P7] |
-| C-12 | Neutralize output-as-instructions | L4 | T-4, LLM02 | [P7] |
+| C-11 | Output secret/PII scan + redaction (pattern + entropy) | L4 | LLM06, Info disclosure | **[IMPL][TEST]** (P7) · not full DLP (R-4) |
+| C-12 | Neutralize output-as-instructions | L4 | T-4, LLM02 | **[IMPL][TEST]** (P7) · heuristic (R-26) |
 | C-13 | Append-only hash-chained audit + correlation ID | L5 | Repudiation, tamper-evidence | **[IMPL][TEST]** (P3) |
 | C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | [IMPL] emitter fail-closed (P3) · all-paths [P8] |
 | C-15 | Fail-closed orchestration (exception/timeout → deny) | Pipeline | DoS, ambiguity | [IMPL] error model · [P8] orchestrator |
@@ -127,7 +130,7 @@ defense-in-depth stack.
 | R-1 | **Gateway bypass** — agents not routed through an MLPEF ingress adapter are entirely unguarded. | HIGH | Document plainly (README); enforce via network policy / egress lockdown at deploy time. Coverage = mandatory ingress, not magic. | Accepted + documented |
 | R-2 | In-memory `NonceStore` is per-process; a horizontally-scaled proxy fleet could allow a replay across instances. | MEDIUM | Bind nonce ledger to shared store (Postgres/Redis) with atomic check-and-set. | Open → P2/P8 |
 | R-3 | Token verification `leeway_seconds` (clock skew) widens the valid window slightly. | LOW | Default leeway = 0; keep control-plane/proxy clocks synced (NTP). | Accepted |
-| R-4 | Output filtering (entropy/pattern) has false negatives; it is not full DLP. | MEDIUM | Document; layer with provider DLP; tune patterns; quarantine on suspicion. | Open → P7 |
+| R-4 | Output filtering (entropy/pattern) has false negatives; it is not full DLP. | MEDIUM | Implemented P7 (scan + redact); residual FN accepted — layer with provider DLP, tune patterns, add an optional quarantine mode. | Implemented (P7); residual accepted |
 | R-5 | Docker is a weaker isolation boundary than a VM/microVM; sandbox escape is conceivable. | MEDIUM–HIGH | `SandboxBackend` interface allows gVisor/Firecracker swap; harden + test escapes. | Open → P6 |
 | R-6 | Last-known-good cached config means a revoked/changed policy has a propagation window. | LOW–MEDIUM | Short TTL + explicit invalidation + bundle versioning; fail closed if no cache. | Open → P8 |
 | R-7 | Policy authoring error (an over-broad allow) grants excess agency. | MEDIUM | `opa test` in CI; "N agents affected" preview before profile edits; default-deny floor. | Open → P5/P10 |
@@ -149,6 +152,8 @@ defense-in-depth stack.
 | R-23 | The native L2 engine and the Rego/WASM policy must stay semantically in sync; drift could allow/deny differently in dev vs prod. | MEDIUM | `authz_test.rego` and the Python L2 tests assert the same cases; a CI cross-check evaluating both over shared fixtures is the durable fix. | Open → P8/P11 |
 | R-24 | L3 network control is on/off (`network_mode=none`); a per-host egress *allowlist* is not yet enforced when networking is enabled. | MEDIUM | Default-off; when enabled, route via a filtering proxy / firewalled network namespace and enforce the profile's egress allowlist there. | Open → P6/P8 |
 | R-25 | userns remapping is a Docker *daemon* setting (`--userns-remap`), not a per-container run flag; the backend runs non-root but relies on deploy config for the user-namespace boundary. | MEDIUM | Enable `--userns-remap` on the daemon; document; consider gVisor/Firecracker (R-5) for a stronger boundary. | Open → deploy/P6 |
+| R-26 | L4 injection neutralization is heuristic (regex markers); novel phrasings evade it (false negatives). | MEDIUM | Durable guarantee is upstream — injected text cannot drive a tool call past the L1 allowlist + L2 default-deny. Tune patterns; treat output strictly as data. | Accepted + documented |
+| R-27 | Entropy-based secret detection can over-redact legitimate high-entropy data (hashes, IDs) — false positives. | LOW | Tunable `secret_entropy_threshold`; explicit pattern matches run first; document. | Accepted |
 
 ## 8. Change log
 
@@ -194,3 +199,10 @@ defense-in-depth stack.
   the hardening config, pool, and executor without a daemon; Docker escape/limit
   tests run when a daemon is present. Added residual risks R-24 (per-host egress
   allowlist) and R-25 (userns remap is daemon-level).
+- **Phase 7:** Layer 4 output filtering. Implemented secret scanning (AWS/GitHub/
+  Slack/JWT/private-key/assignment patterns + Shannon-entropy detection), PII
+  redaction (email/SSN/phone/credit-card per profile categories), and
+  prompt-injection neutralization of output-as-instructions (C-11/C-12), with
+  unit tests. Secrets/injection in output flag a `security_event`; the layer fails
+  closed (deny + empty output) if a scanner errors. Added residual risks R-26
+  (injection neutralization is heuristic) and R-27 (entropy over-redaction).
