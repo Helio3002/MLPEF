@@ -21,6 +21,8 @@ from common import (
     seal_event,
     verify_chain,
 )
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from . import security
 from .config import settings
