@@ -100,9 +100,9 @@ applicable.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **1** | `common/` types + signed-token lib + `THREAT_MODEL.md` skeleton | **this PR** |
-| 2 | Control plane core (DB, CRUD, registration, config bundle, seed) | pending |
-| 3 | L5 audit store + integrity verification | pending |
+| **1** | `common/` types + signed-token lib + `THREAT_MODEL.md` skeleton | **done** |
+| **2** | Control plane core (DB, CRUD, registration, config bundle, seed) | **done** |
+| **3** | L5 audit store + integrity verification | **done** |
 | 4 | L1 validation + adversarial traversal/injection tests | pending |
 | 5 | L2 Rego + WASM + in-process evaluator + HITL wiring | pending |
 | 6 | L3 sandbox backend + hardening + warm pool | pending |
@@ -131,13 +131,19 @@ Requires Python 3.12.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,control,proxy]"
 
-ruff check .          # lint
-mypy                  # static types (strict)
-pytest                # unit + adversarial tests
+ruff check .          # lint (whole repo)
+mypy                  # static types (strict, on common/)
+pytest                # repo-root: common/ unit + adversarial tests
 ```
 
-> Phase 1 ships only `common/`. Service dependencies (FastAPI, SQLAlchemy, the
-> Docker SDK, OPA) and `docker compose up` for the full stack arrive in their
-> respective phases.
+The control-api and data-plane carry their own test roots:
+
+```bash
+cd control-plane/control-api && alembic upgrade head && pytest   # API + audit store
+cd data-plane && pytest                                          # Layer 5 emitter
+```
+
+> Service dependencies (the Docker sandbox SDK, OPA) and `docker compose up` for
+> the full stack arrive in their respective phases.

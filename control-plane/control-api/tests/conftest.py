@@ -44,6 +44,7 @@ def client() -> Iterator[TestClient]:
 
     app = create_app()
     app.dependency_overrides[get_db] = override_get_db
+    app.state.test_engine = engine  # exposed so tamper tests can corrupt a stored row
     with TestClient(app) as test_client:
         yield test_client
     engine.dispose()

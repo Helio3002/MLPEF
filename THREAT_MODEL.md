@@ -46,7 +46,7 @@ the *subject* of a decision, never an *input* to one.
 |---|---|---|---|
 | **S**poofing | Agent credential (API key hash) → identity; admin session + RBAC | Identity | PARTIAL — IMPLEMENTED (P2); mTLS [P8] |
 | **T**ampering | Pydantic strict schemas (`extra=forbid`); signed config bundle; hash-chained audit | L1 / Pipeline / L5 | PARTIAL — strict types IMPLEMENTED (P1) |
-| **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | PLANNED (P3) |
+| **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | IMPLEMENTED (P3) |
 | **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PLANNED (P7) |
 | **D**enial of service | Fail-closed on timeout/exception; sandbox cgroup limits; warm-pool bounds | Pipeline / L3 | PARTIAL — fail-closed error model IMPLEMENTED (P1) |
 | **E**levation of privilege | Default-deny ABAC; per-tool allowlist; HITL token for state-altering actions | L2 | PARTIAL — HITL token lib IMPLEMENTED (P1) |
@@ -110,8 +110,8 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-10 | Network off + egress allowlist | L3 | exfiltration | [P6] |
 | C-11 | Output secret/PII scan + redaction | L4 | LLM06, Info disclosure | [P7] |
 | C-12 | Neutralize output-as-instructions | L4 | T-4, LLM02 | [P7] |
-| C-13 | Append-only hash-chained audit + correlation ID | L5 | Repudiation, tamper-evidence | [P3] |
-| C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | [P3/P8] |
+| C-13 | Append-only hash-chained audit + correlation ID | L5 | Repudiation, tamper-evidence | **[IMPL][TEST]** (P3) |
+| C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | [IMPL] emitter fail-closed (P3) · all-paths [P8] |
 | C-15 | Fail-closed orchestration (exception/timeout → deny) | Pipeline | DoS, ambiguity | [IMPL] error model · [P8] orchestrator |
 | C-16 | Identity resolution from credential; admin RBAC | Identity | Spoofing (T-2 cross-agent) | [IMPL] (P2) · mTLS [P8] |
 | C-17 | Config bundle (etag + version) + cache/hot-reload + signing | Pipeline | config tampering, availability | [IMPL] endpoint+etag (P2) · cache/sign [P8] |
@@ -139,6 +139,10 @@ defense-in-depth stack.
 | R-13 | Seed uses default admin password `admin` if `MLPEF_ADMIN_PASSWORD` is unset. | HIGH (ops) | Seed warns loudly; deploy docs require setting it; no default in compose/prod. | Mitigated + documented |
 | R-14 | Agent API keys are stored as plain SHA-256 (no slow hash). | LOW | Acceptable for 256-bit random keys (no brute-force surface); a slow hash would be required only for low-entropy secrets. | Accepted |
 | R-15 | `Agent.tenant` and `PolicyProfile.tenant` are not enforced to match; an admin can assign a cross-tenant profile. | LOW | Enforce tenant alignment at registration/assignment in P8; RBAC already gates who can assign. | Open → P8 |
+| R-16 | Audit append reads the tail then inserts; concurrent appends from a scaled control-plane could race `seq`/`prev_hash` and fork the chain. | MEDIUM | Serialize appends (SELECT … FOR UPDATE on the tail / single-writer queue / DB sequence) and re-verify on conflict. | Open → P8 |
+| R-17 | The emitter→store hop is trusted to TLS; the chain detects tampering only once records are in the store, not a forged/dropped emit in transit. | MEDIUM | Authenticate the proxy to the store; optionally sign events at the emitter (reuse the token lib). Post-store edits are still detected. | Open → P8 |
+| R-18 | Whole-chain verification is O(n) — it recomputes every record. | LOW | Periodic checkpoint/anchor hashes; verify in segments. | Open |
+| R-19 | The chain is tamper-**evident**, not tamper-**proof** — an attacker with store-write access could rewrite the entire chain consistently. | MEDIUM | Ship to append-only/WORM storage; publish periodic anchor hashes off-system (notary / transparency log). | Documented |
 
 ## 8. Change log
 
@@ -153,3 +157,10 @@ defense-in-depth stack.
   (denies on missing profile / bad credential). Added residual risks R-11…R-15
   (session-token hardening, bundle signing, default password, key hashing,
   tenant alignment).
+- **Phase 3:** Layer 5 audit. Implemented the tamper-evident hash chain
+  (`common.audit`: AuditEvent/AuditRecord, deterministic `seal` + `verify_chain`)
+  with unit + adversarial tamper tests (C-13). Added the control-plane audit store
+  (server-sealed append, filtered query, chain-verification endpoint with
+  end-to-end tamper-detection test) and the fail-closed data-plane emitter (C-14,
+  unskippable). Added residual risks R-16…R-19 (append serialization, emitter
+  transport, O(n) verify, WORM/anchoring).

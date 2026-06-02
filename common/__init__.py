@@ -7,6 +7,16 @@ plane (proxy) and the control plane (control-api). It carries no framework code
 
 from __future__ import annotations
 
+from .audit import (
+    GENESIS_PREV_HASH,
+    AuditEvent,
+    AuditRecord,
+    ChainVerification,
+    build_audit_event,
+    compute_record_hash,
+    seal_event,
+    verify_chain,
+)
 from .decision import LayerDecision, PipelineResult
 from .enums import (
     DenyReasonCode,
@@ -67,6 +77,15 @@ from .tokens import (
 )
 
 __all__ = [
+    # audit
+    "GENESIS_PREV_HASH",
+    "AuditEvent",
+    "AuditRecord",
+    "ChainVerification",
+    "build_audit_event",
+    "compute_record_hash",
+    "seal_event",
+    "verify_chain",
     # decision
     "LayerDecision",
     "PipelineResult",

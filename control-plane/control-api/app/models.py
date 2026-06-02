@@ -88,3 +88,24 @@ class Tool(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class AuditRecordRow(Base):
+    """One sealed, hash-chained audit entry. `seq` is the chain position; the
+    store assigns it (single writer). Scalar columns mirror the JSON `event` for
+    filtering; `prev_hash`/`record_hash` carry the tamper-evident chain."""
+
+    __tablename__ = "audit_records"
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    correlation_id: Mapped[str] = mapped_column(String(64), index=True)
+    agent_id: Mapped[str] = mapped_column(String(64), index=True)
+    tenant: Mapped[str] = mapped_column(String(128), index=True)
+    action: Mapped[str] = mapped_column(String(255), index=True)
+    final_verdict: Mapped[str] = mapped_column(String(32), index=True)
+    security_event: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    timestamp: Mapped[int] = mapped_column(Integer)
+    recorded_at: Mapped[int] = mapped_column(Integer)
+    prev_hash: Mapped[str] = mapped_column(String(64))
+    record_hash: Mapped[str] = mapped_column(String(64), index=True)
+    event: Mapped[dict[str, Any]] = mapped_column(JSON)

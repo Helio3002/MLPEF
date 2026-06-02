@@ -13,11 +13,29 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from common import ConfigBundle, PolicyProfile, now_epoch
+from common import (
+    GENESIS_PREV_HASH,
+    AuditEvent,
+    AuditRecord,
+    ChainVerification,
+    ConfigBundle,
+    PolicyProfile,
+    now_epoch,
+    seal_event,
+    verify_chain,
+)
 
 from . import security
 from .config import settings
-from .models import AdminSession, AdminUser, Agent, PolicyProfileRow, Tool, utcnow
+from .models import (
+    AdminSession,
+    AdminUser,
+    Agent,
+    AuditRecordRow,
+    PolicyProfileRow,
+    Tool,
+    utcnow,
+)
 
 
 def _as_aware_utc(dt: datetime) -> datetime:
@@ -220,3 +238,76 @@ def build_config_bundle(db: Session, agent: Agent) -> ConfigBundle | None:
         bundle_version=row.version,
         etag=etag,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Audit store — server-sealed, tamper-evident chain
+# --------------------------------------------------------------------------- #
+def _row_to_record(row: AuditRecordRow) -> AuditRecord:
+    return AuditRecord(
+        seq=row.seq,
+        prev_hash=row.prev_hash,
+        recorded_at=row.recorded_at,
+        event=AuditEvent.model_validate(row.event),
+        record_hash=row.record_hash,
+    )
+
+
+def append_audit_event(db: Session, event: AuditEvent) -> AuditRecord:
+    # Single-writer append: link to the current tail, then seal. (Concurrency
+    # hardening — SELECT ... FOR UPDATE / single-writer queue — tracked as a
+    # residual risk; see THREAT_MODEL.md R-16.)
+    last = db.execute(
+        select(AuditRecordRow).order_by(AuditRecordRow.seq.desc()).limit(1)
+    ).scalar_one_or_none()
+    seq = last.seq + 1 if last is not None else 0
+    prev_hash = last.record_hash if last is not None else GENESIS_PREV_HASH
+    record = seal_event(event, seq=seq, prev_hash=prev_hash, recorded_at=now_epoch())
+    db.add(
+        AuditRecordRow(
+            seq=record.seq,
+            correlation_id=event.correlation_id,
+            agent_id=event.agent_id,
+            tenant=event.tenant,
+            action=event.action,
+            final_verdict=event.final_verdict.value,
+            security_event=event.security_event,
+            timestamp=event.timestamp,
+            recorded_at=record.recorded_at,
+            prev_hash=record.prev_hash,
+            record_hash=record.record_hash,
+            event=event.model_dump(mode="json"),
+        )
+    )
+    db.commit()
+    return record
+
+
+def list_audit(
+    db: Session,
+    *,
+    agent_id: str | None = None,
+    action: str | None = None,
+    outcome: str | None = None,
+    correlation_id: str | None = None,
+    security_event: bool | None = None,
+    limit: int = 100,
+) -> list[AuditRecord]:
+    stmt = select(AuditRecordRow).order_by(AuditRecordRow.seq.asc())
+    if agent_id is not None:
+        stmt = stmt.where(AuditRecordRow.agent_id == agent_id)
+    if action is not None:
+        stmt = stmt.where(AuditRecordRow.action == action)
+    if outcome is not None:
+        stmt = stmt.where(AuditRecordRow.final_verdict == outcome)
+    if correlation_id is not None:
+        stmt = stmt.where(AuditRecordRow.correlation_id == correlation_id)
+    if security_event is not None:
+        stmt = stmt.where(AuditRecordRow.security_event == security_event)
+    stmt = stmt.limit(limit)
+    return [_row_to_record(r) for r in db.execute(stmt).scalars().all()]
+
+
+def verify_audit_chain(db: Session) -> ChainVerification:
+    rows = db.execute(select(AuditRecordRow).order_by(AuditRecordRow.seq.asc())).scalars().all()
+    return verify_chain([_row_to_record(r) for r in rows])
