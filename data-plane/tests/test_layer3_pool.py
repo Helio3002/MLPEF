@@ -28,7 +28,9 @@ class FakeSandbox:
 
 
 class FakeBackend:
-    def __init__(self, *, result: SandboxResult | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self, *, result: SandboxResult | None = None, error: Exception | None = None
+    ) -> None:
         self.created: list[FakeSandbox] = []
         self._result = result
         self._error = error
@@ -65,7 +67,9 @@ def test_execute_success_and_destroys_sandbox() -> None:
 
 def test_execute_timeout_denies() -> None:
     timed = SandboxResult(exit_code=-1, stdout="", stderr="", timed_out=True, elapsed_ms=5000.0)
-    decision, _ = execute(_pool(FakeBackend(result=timed), size=1), ["sleep", "99"], timeout_seconds=1)
+    decision, _ = execute(
+        _pool(FakeBackend(result=timed), size=1), ["sleep", "99"], timeout_seconds=1
+    )
     assert decision.verdict is Verdict.DENY
     assert decision.reason_code is DenyReasonCode.SANDBOX_TIMEOUT
 
