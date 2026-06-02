@@ -48,7 +48,7 @@ the *subject* of a decision, never an *input* to one.
 | **T**ampering | Strict input validation (allowlist / jail / argv-only); signed config bundle; hash-chained audit | L1 / Pipeline / L5 | PARTIAL — L1 + audit IMPLEMENTED (P1/P3/P4) |
 | **R**epudiation | Append-only, hash-chained audit with correlation IDs | L5 | IMPLEMENTED (P3) |
 | **I**nformation disclosure | Output secret/PII scanning + redaction | L4 | PLANNED (P7) |
-| **D**enial of service | Fail-closed on timeout/exception; sandbox cgroup limits; warm-pool bounds | Pipeline / L3 | PARTIAL — fail-closed error model IMPLEMENTED (P1) |
+| **D**enial of service | Fail-closed on timeout/exception; sandbox cgroup limits; warm-pool bounds | Pipeline / L3 | PARTIAL — fail-closed (P1) + sandbox limits/timeout IMPLEMENTED (P6) |
 | **E**levation of privilege | Default-deny ABAC; per-tool allowlist; HITL token for state-altering actions | L2 | PARTIAL — default-deny + HITL IMPLEMENTED (P1/P5) |
 
 ## 4. OWASP LLM Top 10 mapping
@@ -105,9 +105,9 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-5 | Default-deny ABAC (`default allow = false`) | L2 | T-1, EoP | **[IMPL][TEST]** native+rego (P5) · WASM build [P8] |
 | C-6 | **HITL token**: signed, scoped, single-use, expiring | L2 | T-2, T-3, EoP | **[IMPL][TEST]** (P1) · L2 + control-plane mint wired (P5) |
 | C-7 | Asymmetric signing (proxy holds public key only) | L2 | forgery under breach | **[IMPL][TEST]** |
-| C-8 | Sandbox hardening (ro-rootfs, cap-drop, seccomp, userns) | L3 | containment, EoP | [P6] |
-| C-9 | cgroup CPU/mem/pids limits + timeout | L3 | DoS, runaway tools | [P6] |
-| C-10 | Network off + egress allowlist | L3 | exfiltration | [P6] |
+| C-8 | Sandbox hardening (ro-rootfs, cap-drop, no-new-privs, non-root, seccomp) | L3 | containment, EoP | **[IMPL][TEST]** config (P6) · live escape tests need Docker |
+| C-9 | cgroup CPU/mem/pids limits + timeout | L3 | DoS, runaway tools | **[IMPL][TEST]** (P6) |
+| C-10 | Network off (default) + egress allowlist | L3 | exfiltration | **[IMPL]** network-off (P6) · per-host egress [R-24] |
 | C-11 | Output secret/PII scan + redaction | L4 | LLM06, Info disclosure | [P7] |
 | C-12 | Neutralize output-as-instructions | L4 | T-4, LLM02 | [P7] |
 | C-13 | Append-only hash-chained audit + correlation ID | L5 | Repudiation, tamper-evidence | **[IMPL][TEST]** (P3) |
@@ -147,6 +147,8 @@ defense-in-depth stack.
 | R-21 | L1 URL validation is structural only (scheme/host/encoding); it does not enforce a host/egress allowlist. | LOW | Host allowlist (L2 policy) + egress allowlist (L3 sandbox) enforce destination control. | Open → P5/P6 |
 | R-22 | Dev signing key is **ephemeral** when `MLPEF_HITL_PRIVATE_KEY_PEM` is unset — tokens do not survive a control-plane restart, and the key is not backed up. | LOW (dev) | Supply the key from a secret manager / HSM in production (see R-8); ephemeral only for local dev, with a startup warning. | Mitigated + documented |
 | R-23 | The native L2 engine and the Rego/WASM policy must stay semantically in sync; drift could allow/deny differently in dev vs prod. | MEDIUM | `authz_test.rego` and the Python L2 tests assert the same cases; a CI cross-check evaluating both over shared fixtures is the durable fix. | Open → P8/P11 |
+| R-24 | L3 network control is on/off (`network_mode=none`); a per-host egress *allowlist* is not yet enforced when networking is enabled. | MEDIUM | Default-off; when enabled, route via a filtering proxy / firewalled network namespace and enforce the profile's egress allowlist there. | Open → P6/P8 |
+| R-25 | userns remapping is a Docker *daemon* setting (`--userns-remap`), not a per-container run flag; the backend runs non-root but relies on deploy config for the user-namespace boundary. | MEDIUM | Enable `--userns-remap` on the daemon; document; consider gVisor/Firecracker (R-5) for a stronger boundary. | Open → deploy/P6 |
 
 ## 8. Change log
 
@@ -184,3 +186,11 @@ defense-in-depth stack.
   token minted, or deny) + public-key endpoint, with an end-to-end mint→verify
   test. Added residual risks R-22 (ephemeral dev signing key) and R-23 (native↔WASM
   policy parity).
+- **Phase 6:** Layer 3 sandbox. Implemented the `SandboxBackend` interface and a
+  hardened `DockerSandbox` (read-only rootfs, cap-drop ALL, no-new-privileges,
+  non-root, default seccomp, CPU/mem/pids cgroup limits, network-off, tmpfs
+  scratch) with the warm-pool manager (prewarm → one-shot checkout → destroy →
+  refill, latency measured) and a fail-closed executor (C-8/C-9/C-10). Unit-tested
+  the hardening config, pool, and executor without a daemon; Docker escape/limit
+  tests run when a daemon is present. Added residual risks R-24 (per-host egress
+  allowlist) and R-25 (userns remap is daemon-level).
