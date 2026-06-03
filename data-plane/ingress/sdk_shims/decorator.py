@@ -49,9 +49,8 @@ def governed(
             )
             outcome = handler.handle(intent, credential=credential)
             if not outcome.result.allowed:
-                raise GovernanceDenied(
-                    f"MLPEF {outcome.result.final_verdict.value} for {tool}: {outcome.result.reason}"
-                )
+                verdict = outcome.result.final_verdict.value
+                raise GovernanceDenied(f"MLPEF {verdict} for {tool}: {outcome.result.reason}")
             return func(*args, **kwargs)
 
         return wrapper

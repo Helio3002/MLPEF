@@ -55,7 +55,6 @@ class GovernedTool:
         )
         outcome = self._handler.handle(intent, credential=self._credential)
         if not outcome.result.allowed:
-            raise GovernanceDenied(
-                f"MLPEF {outcome.result.final_verdict.value} for {self.name}: {outcome.result.reason}"
-            )
+            verdict = outcome.result.final_verdict.value
+            raise GovernanceDenied(f"MLPEF {verdict} for {self.name}: {outcome.result.reason}")
         return self._func(**arguments)
