@@ -107,7 +107,7 @@ applicable.
 | **5** | L2 Rego + WASM + in-process evaluator + HITL wiring | **done** |
 | **6** | L3 sandbox backend + hardening + warm pool | **done** |
 | **7** | L4 output scanners + loop-injection stripping | **done** |
-| 8 | Proxy orchestration + identity + config cache + e2e | pending |
+| **8** | Proxy orchestration + identity + config cache + e2e | **done** |
 | 9 | Ingress adapters + integration docs + sample agent | pending |
 | 10 | Admin UI (RBAC-gated) | pending |
 | 11 | `docker-compose` full stack + measured benchmarks | pending |

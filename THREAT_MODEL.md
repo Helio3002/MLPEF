@@ -114,10 +114,10 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-11 | Output secret/PII scan + redaction (pattern + entropy) | L4 | LLM06, Info disclosure | **[IMPL][TEST]** (P7) · not full DLP (R-4) |
 | C-12 | Neutralize output-as-instructions | L4 | T-4, LLM02 | **[IMPL][TEST]** (P7) · heuristic (R-26) |
 | C-13 | Append-only hash-chained audit + correlation ID | L5 | Repudiation, tamper-evidence | **[IMPL][TEST]** (P3) |
-| C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | [IMPL] emitter fail-closed (P3) · all-paths [P8] |
-| C-15 | Fail-closed orchestration (exception/timeout → deny) | Pipeline | DoS, ambiguity | [IMPL] error model · [P8] orchestrator |
-| C-16 | Identity resolution from credential; admin RBAC | Identity | Spoofing (T-2 cross-agent) | [IMPL] (P2) · mTLS [P8] |
-| C-17 | Config bundle (etag + version) + cache/hot-reload + signing | Pipeline | config tampering, availability | [IMPL] endpoint+etag (P2) · cache/sign [P8] |
+| C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | **[IMPL][TEST]** emitter (P3) + pipeline all-paths (P8) |
+| C-15 | Fail-closed orchestration (exception/timeout → deny) | Pipeline | DoS, ambiguity | **[IMPL][TEST]** error model (P1) + orchestrator (P8) |
+| C-16 | Identity resolution from credential; admin RBAC | Identity | Spoofing (T-2 cross-agent) | **[IMPL]** cred→identity (P2) + proxy resolution (P8) · mTLS [future] |
+| C-17 | Config bundle (etag + version) + cache/hot-reload + signing | Pipeline | config tampering, availability | **[IMPL][TEST]** endpoint (P2) + cache/hot-reload/last-known-good (P8) · signing [R-12] |
 | C-18 | Safe-by-default (deny-most) profile at registration | Control plane | T-1 for unconfigured agents | [IMPL] schema (P1) + flow (P2) |
 
 ## 7. Residual risk register
@@ -154,6 +154,7 @@ defense-in-depth stack.
 | R-25 | userns remapping is a Docker *daemon* setting (`--userns-remap`), not a per-container run flag; the backend runs non-root but relies on deploy config for the user-namespace boundary. | MEDIUM | Enable `--userns-remap` on the daemon; document; consider gVisor/Firecracker (R-5) for a stronger boundary. | Open → deploy/P6 |
 | R-26 | L4 injection neutralization is heuristic (regex markers); novel phrasings evade it (false negatives). | MEDIUM | Durable guarantee is upstream — injected text cannot drive a tool call past the L1 allowlist + L2 default-deny. Tune patterns; treat output strictly as data. | Accepted + documented |
 | R-27 | Entropy-based secret detection can over-redact legitimate high-entropy data (hashes, IDs) — false positives. | LOW | Tunable `secret_entropy_threshold`; explicit pattern matches run first; document. | Accepted |
+| R-28 | Audit is recorded *after* L3 execution, so a tool's external side effect occurs before its audit record is committed; if the audit write then fails, the call fails closed but the side effect already happened. | LOW–MEDIUM | Split into a pre-execution decision audit + post-execution outcome audit; the ephemeral sandbox bounds the blast radius meanwhile. | Open → P11 |
 
 ## 8. Change log
 
@@ -206,3 +207,12 @@ defense-in-depth stack.
   unit tests. Secrets/injection in output flag a `security_event`; the layer fails
   closed (deny + empty output) if a scanner errors. Added residual risks R-26
   (injection neutralization is heuristic) and R-27 (entropy over-redaction).
+- **Phase 8:** Proxy orchestration. Wired the five layers into one fail-closed
+  pipeline (L1→L2→L3→L4→L5): the first non-allow stops the flow, any exception
+  becomes a coded deny, and the audit write is unskippable — an audit failure
+  itself fails the call closed (C-14, C-15). Added the per-agent config-bundle
+  cache (TTL + hot-reload + last-known-good on transient control-plane outages,
+  fail-closed when no cache, never-stale for revoked credentials) and proxy-side
+  identity resolution (C-16, C-17), with end-to-end tests (allow / traversal-deny
+  / HITL / timeout / audit-failure / identity-failure). Added residual risk R-28
+  (audit-after-side-effect ordering).
