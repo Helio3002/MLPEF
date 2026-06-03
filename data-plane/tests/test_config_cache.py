@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from common import ConfigBundle, ConfigUnavailable, IdentityUnresolved, default_locked_down_profile
+
 from proxy import ConfigCache
 
 

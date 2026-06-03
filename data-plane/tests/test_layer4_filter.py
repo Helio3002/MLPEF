@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from common import OutputFilterPolicy, Verdict
+
 from layer4_filter import filter_output
 
 

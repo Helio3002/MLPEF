@@ -15,8 +15,6 @@ import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 from common import (
     AuditFailure,
     DenyReasonCode,
@@ -30,6 +28,8 @@ from common import (
     Verdict,
     now_epoch,
 )
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
 from layer1_validation import ToolSpec
 from layer1_validation import validate as l1_validate
 from layer2_policy import evaluate as l2_evaluate
