@@ -127,7 +127,7 @@ defense-in-depth stack.
 
 | ID | Residual risk | Severity | Mitigation / plan | Status |
 |---|---|---|---|---|
-| R-1 | **Gateway bypass** — agents not routed through an MLPEF ingress adapter are entirely unguarded. | HIGH | Document plainly (README); enforce via network policy / egress lockdown at deploy time. Coverage = mandatory ingress, not magic. | Accepted + documented |
+| R-1 | **Gateway bypass** — agents not routed through an MLPEF ingress adapter are entirely unguarded. | HIGH | Adapters shipped P9 (MCP/OpenAI/REST/SDK) to maximize the mandatory ingress surface; enforce routing via network policy / egress lockdown at deploy. Coverage = mandatory ingress, not magic. | Accepted + documented |
 | R-2 | In-memory `NonceStore` is per-process; a horizontally-scaled proxy fleet could allow a replay across instances. | MEDIUM | Bind nonce ledger to shared store (Postgres/Redis) with atomic check-and-set. | Open → P2/P8 |
 | R-3 | Token verification `leeway_seconds` (clock skew) widens the valid window slightly. | LOW | Default leeway = 0; keep control-plane/proxy clocks synced (NTP). | Accepted |
 | R-4 | Output filtering (entropy/pattern) has false negatives; it is not full DLP. | MEDIUM | Implemented P7 (scan + redact); residual FN accepted — layer with provider DLP, tune patterns, add an optional quarantine mode. | Implemented (P7); residual accepted |
@@ -216,3 +216,9 @@ defense-in-depth stack.
   identity resolution (C-16, C-17), with end-to-end tests (allow / traversal-deny
   / HITL / timeout / audit-failure / identity-failure). Added residual risk R-28
   (audit-after-side-effect ordering).
+- **Phase 9:** Universal ingress adapters. Shipped the MCP gateway (primary path),
+  the OpenAI-compatible tool-call shim, plain REST `/v1/execute`, and SDK shims (a
+  governed decorator + a LangChain-style tool wrapper) — all normalize native input
+  into the same `Intent` and submit it to the identical pipeline, with per-adapter
+  integration docs and a sample agent. Reinforces R-1: coverage depends on agents
+  routing through an adapter; bypass = no enforcement.

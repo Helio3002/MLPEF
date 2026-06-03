@@ -28,7 +28,9 @@ control = [
 ]
 # Phase 3+ — data-plane proxy runtime. Install with: pip install -e ".[dev,proxy]"
 proxy = [
-    "httpx>=0.27",  # audit emitter -> control-plane store; ingress HTTP clients
+    "fastapi>=0.110",  # REST + OpenAI-compatible ingress adapters
+    "uvicorn[standard]>=0.29",
+    "httpx>=0.27",  # config-bundle pull + audit emit; ingress HTTP clients
     "docker>=7.0",  # Layer 3 sandbox backend
 ]
 
