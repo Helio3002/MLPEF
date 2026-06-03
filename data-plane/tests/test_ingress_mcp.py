@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from common import Intent, PipelineResult, Verdict
+
 from ingress import McpGateway
 from proxy import PipelineOutcome
 

@@ -10,10 +10,9 @@ from __future__ import annotations
 import json
 from typing import Annotated
 
+from common import IngressSource
 from fastapi import APIRouter, Header
 from pydantic import BaseModel
-
-from common import IngressSource
 
 from .base import GovernedHandler, build_intent
 

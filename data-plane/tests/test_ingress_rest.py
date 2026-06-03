@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from common import DenyReasonCode, Intent, PipelineResult, Verdict
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from common import DenyReasonCode, Intent, PipelineResult, Verdict
 from ingress.rest import create_rest_router
 from proxy import PipelineOutcome
 

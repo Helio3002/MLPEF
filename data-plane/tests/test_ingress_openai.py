@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from common import Intent, PipelineResult, Verdict
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from common import Intent, PipelineResult, Verdict
 from ingress.openai_compat import create_openai_router
 from proxy import PipelineOutcome
 

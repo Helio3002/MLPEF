@@ -11,9 +11,9 @@ from __future__ import annotations
 import uuid
 from typing import Protocol, runtime_checkable
 
+from common import IngressSource, Intent, now_epoch
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from common import IngressSource, Intent, now_epoch
 from proxy import PipelineOutcome
 
 

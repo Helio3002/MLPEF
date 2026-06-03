@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from common import Intent, PipelineResult, Verdict
+
 from ingress import GovernanceDenied, GovernedTool, governed
 from proxy import PipelineOutcome
 

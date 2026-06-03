@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from common import IngressSource, Verdict
 from fastapi import APIRouter, Header, Response, status
 from pydantic import BaseModel, Field, JsonValue
-
-from common import IngressSource, Verdict
 
 from .base import ExecuteResponse, GovernedHandler, build_intent, outcome_to_response
 
