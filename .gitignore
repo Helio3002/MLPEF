@@ -220,3 +220,5 @@ control-plane/control-api/mlpef_control.db
 .env.local
 control-plane/admin-ui/package-lock.json
 control-plane/admin-ui/package-lock.json
+control-plane/admin-ui/package-lock.json
+control-plane/admin-ui/.env.example

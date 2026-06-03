@@ -11,9 +11,10 @@ from .routers import agents, audit, auth, hitl, profiles, tools
 
 def create_app() -> FastAPI:
     app = FastAPI(title="MLPEF Control API", version="0.2.0")
+    new_var = ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_allow_origins,
+        allow_origins=new_var,
         allow_methods=["*"],
         allow_headers=["*"],
         allow_credentials=False,

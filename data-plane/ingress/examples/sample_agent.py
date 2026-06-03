@@ -18,7 +18,7 @@ import os
 
 import httpx
 
-MLPEF_URL = os.environ.get("MLPEF_INGRESS_URL", "http://localhost:8080")
+MLPEF_URL = os.environ.get("MLPEF_INGRESS_URL", "https://turbo-goldfish-4jgjqvw995ggfq9v7-8080.app.github.dev")
 AGENT_ID = os.environ.get("MLPEF_AGENT_ID", "")
 AGENT_KEY = os.environ.get("MLPEF_AGENT_KEY", "")
 

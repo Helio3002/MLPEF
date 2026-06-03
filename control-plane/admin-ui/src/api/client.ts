@@ -12,7 +12,7 @@ import type {
   Tool,
 } from "./types";
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE = import.meta.env.VITE_API_BASE_URL ?? "https://turbo-goldfish-4jgjqvw995ggfq9v7-8080.app.github.dev/";
 
 export class ApiError extends Error {
   readonly status: number;

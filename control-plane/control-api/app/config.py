@@ -21,7 +21,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
-        cors = os.environ.get("MLPEF_CORS_ORIGINS", "http://localhost:5173")
+        cors = os.environ.get("MLPEF_CORS_ORIGINS", "https://turbo-goldfish-4jgjqvw995ggfq9v7-5173.app.github.dev")
         return cls(
             database_url=os.environ.get("DATABASE_URL", "sqlite:///./mlpef_control.db"),
             session_ttl_seconds=int(os.environ.get("MLPEF_SESSION_TTL_SECONDS", "43200")),
