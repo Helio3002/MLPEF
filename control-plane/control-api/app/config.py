@@ -17,14 +17,17 @@ class Settings:
     session_ttl_seconds: int
     agent_key_header: str
     hitl_token_ttl_seconds: int
+    cors_allow_origins: list[str]
 
     @classmethod
     def from_env(cls) -> Settings:
+        cors = os.environ.get("MLPEF_CORS_ORIGINS", "http://localhost:5173")
         return cls(
             database_url=os.environ.get("DATABASE_URL", "sqlite:///./mlpef_control.db"),
             session_ttl_seconds=int(os.environ.get("MLPEF_SESSION_TTL_SECONDS", "43200")),
             agent_key_header=os.environ.get("MLPEF_AGENT_KEY_HEADER", "X-Agent-Key"),
             hitl_token_ttl_seconds=int(os.environ.get("MLPEF_HITL_TOKEN_TTL_SECONDS", "300")),
+            cors_allow_origins=[o.strip() for o in cors.split(",") if o.strip()],
         )
 
 

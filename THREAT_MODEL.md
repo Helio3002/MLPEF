@@ -137,7 +137,7 @@ defense-in-depth stack.
 | R-8 | Control-plane **signing key** compromise lets an attacker mint approval tokens. | HIGH | Store in secret manager/HSM; rotate; never on the proxy; restrict minting RBAC. | Open → P2 |
 | R-9 | The LLM remains attacker-controlled by design. | (by design) | All guarantees are deterministic and downstream of the model; never trust model output as a decision input. | Accepted |
 | R-10 | Side/covert channels out of the sandbox (timing, resource). | LOW | cgroup limits; minimal egress; document. | Accepted → P6 |
-| R-11 | Admin session bearer tokens: no rotation/CSRF protection yet; theft replays until expiry. | MEDIUM | Short TTL; HTTPS-only; rotation + CSRF/SameSite handling with the UI. | Open → P10 |
+| R-11 | Admin session bearer tokens are stored in browser `localStorage` (XSS could exfiltrate) and lack rotation/CSRF. | MEDIUM | Short TTL; HTTPS-only; CSP on the UI; consider an httpOnly cookie + CSRF token; rotation. | Open → hardening |
 | R-12 | Config bundle is not yet cryptographically signed; the proxy trusts transport (TLS) only. | MEDIUM | Sign the bundle with the control-plane key (reuse token lib); proxy verifies. | Open → P8 |
 | R-13 | Seed uses default admin password `admin` if `MLPEF_ADMIN_PASSWORD` is unset. | HIGH (ops) | Seed warns loudly; deploy docs require setting it; no default in compose/prod. | Mitigated + documented |
 | R-14 | Agent API keys are stored as plain SHA-256 (no slow hash). | LOW | Acceptable for 256-bit random keys (no brute-force surface); a slow hash would be required only for low-entropy secrets. | Accepted |
@@ -222,3 +222,10 @@ defense-in-depth stack.
   into the same `Intent` and submit it to the identical pipeline, with per-adapter
   integration docs and a sample agent. Reinforces R-1: coverage depends on agents
   routing through an adapter; bypass = no enforcement.
+- **Phase 10:** Admin UI. React + Vite + TS + Tailwind portal (talks only to the
+  control-api): login → session bearer token → RBAC-gated pages for Agents, Policy
+  Profiles, Tools, the HITL approval queue (approve mints a scoped token), the Audit
+  Explorer (filters, five-layer trace, one-click chain verification, CSV/JSON
+  export), and a Dashboard (denial rate, blocked-attack counts, decision-path
+  p50/p99). Added CORS to the control-api. UI copy never claims total protection.
+  Updated R-11 (UI token storage in localStorage).
