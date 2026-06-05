@@ -155,6 +155,9 @@ defense-in-depth stack.
 | R-26 | L4 injection neutralization is heuristic (regex markers); novel phrasings evade it (false negatives). | MEDIUM | Durable guarantee is upstream — injected text cannot drive a tool call past the L1 allowlist + L2 default-deny. Tune patterns; treat output strictly as data. | Accepted + documented |
 | R-27 | Entropy-based secret detection can over-redact legitimate high-entropy data (hashes, IDs) — false positives. | LOW | Tunable `secret_entropy_threshold`; explicit pattern matches run first; document. | Accepted |
 | R-28 | Audit is recorded *after* L3 execution, so a tool's external side effect occurs before its audit record is committed; if the audit write then fails, the call fails closed but the side effect already happened. | LOW–MEDIUM | Split into a pre-execution decision audit + post-execution outcome audit; the ephemeral sandbox bounds the blast radius meanwhile. | Open → P11 |
+| R-29 | The `docker-compose` stack ships **dev defaults**: `.env.example` carries placeholder passwords, and when `MLPEF_SAMPLE_AGENT_ID`/`_API_KEY` are set the seed creates a sample agent with a **fixed, reproducible credential** (demo convenience). | HIGH (ops) | `.env.example` flags every secret "change-me"; the fixed-credential path warns loudly at seed time and is opt-in (unset → random key shown once); never deploy the demo `.env`. Compose is a dev/demo harness, not a prod manifest. | Accepted + documented |
+| R-30 | The compose **proxy runs with the sandbox disabled** (`command_builder` returns None): L3/L4 are skipped, so in the default stack tool *execution* is not sandboxed/filtered — only L1/L2/L5 are exercised. Enabling real execution requires mounting the host `docker.sock` (or DinD), a **privileged** boundary. | MEDIUM | Default-off avoids shipping a privileged socket mount; document the trade-off. To enable: mount the socket on a hardened host, wire a real `DockerSandboxBackend` + `command_builder`, and prefer gVisor/Firecracker (R-5) over the raw daemon. | By design + documented |
+| R-31 | The demo stack serves the admin UI and APIs over **plain HTTP** with no TLS, and `VITE_API_BASE_URL` is **baked into the UI bundle at build time**; bearer tokens and agent keys therefore traverse cleartext locally and the UI must be rebuilt to retarget the API. | MEDIUM | Terminate TLS at a reverse proxy / ingress in front of every service for anything beyond localhost; rebuild the UI per environment (or move to runtime config). Reinforces R-11 (token storage). | Open → deploy |
 
 ## 8. Change log
 
@@ -229,3 +232,13 @@ defense-in-depth stack.
   export), and a Dashboard (denial rate, blocked-attack counts, decision-path
   p50/p99). Added CORS to the control-api. UI copy never claims total protection.
   Updated R-11 (UI token storage in localStorage).
+- **Phase 11:** Full-stack `docker-compose` (Postgres + control-api + admin-ui +
+  proxy, with an opt-in `demo`-profile sample agent) and a measured benchmark
+  harness (`tests/bench/`: decision-path L1+L2, and warm-pool vs cold-create
+  sandbox). Made `GET /hitl/public-key` PUBLIC so the proxy can fetch the
+  verification key at startup (public key only — it still cannot mint). The proxy
+  entrypoint (`proxy/server.py`) runs with the **sandbox disabled** for the demo.
+  Benchmark numbers are filled from a real run, never fabricated (constraint #3).
+  Added residual risks R-29 (compose dev secrets + fixed demo agent credential),
+  R-30 (sandbox disabled in compose; enabling needs a privileged docker socket),
+  and R-31 (no TLS + build-time-baked UI API URL in the demo).

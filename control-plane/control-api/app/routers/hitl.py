@@ -25,7 +25,12 @@ _APPROVE_ROLES = ("superadmin", "approver")
 
 
 @router.get("/public-key", response_model=PublicKeyOut)
-def public_key(_agent: Annotated[Agent, Depends(get_current_agent)]) -> PublicKeyOut:
+def public_key() -> PublicKeyOut:
+    # Intentionally PUBLIC (no auth): this is the Ed25519 *public* verification key.
+    # The proxy fetches it at startup before it holds any agent credential, and a
+    # public key is safe to disclose — only the control plane holds the private key
+    # that mints tokens (see THREAT_MODEL.md R-8 / assume-breach: proxy verifies,
+    # never mints). Making it public removes a needless bootstrap dependency.
     return PublicKeyOut(algorithm="ed25519", public_key_pem=signing.public_key_pem())
 
 

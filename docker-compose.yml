@@ -1,0 +1,132 @@
+# MLPEF full stack — control plane (Postgres + control-api + admin-ui) and data
+# plane (proxy). Bring it up with:
+#
+#   cp .env.example .env      # then edit the secrets
+#   docker compose up --build
+#
+# Endpoints (default port mapping):
+#   control-api  http://localhost:8080      (FastAPI; /docs for the API)
+#   admin-ui     http://localhost:8081      (log in with MLPEF_ADMIN_* )
+#   proxy        http://localhost:8090      (data-plane ingress; POST /v1/execute)
+#
+# The `sample-agent` service is under the `demo` profile so it does not run on a
+# plain `up`. Run it on demand once you've granted a tool in the UI:
+#   docker compose --profile demo run --rm sample-agent
+#
+# NOTE: the proxy runs with the sandbox DISABLED (no Docker-in-Docker). L1/L2/L5
+# — validation, default-deny policy, HITL tokens, and the unskippable audit — are
+# fully live; tool *execution* (L3/L4) is intentionally not wired here. See
+# data-plane/proxy/server.py and THREAT_MODEL.md R-29.
+
+name: mlpef
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  control-api:
+    build:
+      context: .
+      dockerfile: control-plane/control-api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MLPEF_ADMIN_USERNAME: ${MLPEF_ADMIN_USERNAME}
+      MLPEF_ADMIN_PASSWORD: ${MLPEF_ADMIN_PASSWORD}
+      MLPEF_CORS_ORIGINS: ${MLPEF_CORS_ORIGINS}
+      MLPEF_HITL_PRIVATE_KEY_PEM: ${MLPEF_HITL_PRIVATE_KEY_PEM:-}
+      MLPEF_SAMPLE_AGENT_ID: ${MLPEF_SAMPLE_AGENT_ID:-}
+      MLPEF_SAMPLE_AGENT_API_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8080/healthz")
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 25s
+
+  admin-ui:
+    build:
+      context: ./control-plane/admin-ui
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      control-api:
+        condition: service_started
+    ports:
+      - "8081:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  proxy:
+    build:
+      context: .
+      dockerfile: data-plane/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      control-api:
+        condition: service_healthy
+    environment:
+      MLPEF_CONTROL_PLANE_URL: http://control-api:8080
+      # Audit goes to stdout by default (docker compose logs proxy). To POST to
+      # the control-plane store instead, set MLPEF_AUDIT_URL + MLPEF_AUDIT_AGENT_KEY.
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8090/healthz")
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  # Demo driver: calls a tool through the proxy with the seeded sample-agent
+  # credential. One-shot (exits). Profile-gated so `up` stays clean.
+  sample-agent:
+    build:
+      context: .
+      dockerfile: data-plane/Dockerfile
+    profiles: ["demo"]
+    depends_on:
+      proxy:
+        condition: service_healthy
+    environment:
+      MLPEF_INGRESS_URL: http://proxy:8090
+      MLPEF_AGENT_ID: ${MLPEF_SAMPLE_AGENT_ID}
+      MLPEF_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY}
+    restart: "no"
+    command: ["python", "ingress/examples/sample_agent.py"]
+
+volumes:
+  pgdata:

@@ -41,15 +41,37 @@ def main() -> None:
             print(f"[seed] profile '{_DEFAULT_PROFILE_ID}' already exists; skipping")
 
         if not any(a.name == "sample-agent" for a in crud.list_agents(db)):
-            api_key = security.generate_api_key()
-            crud.create_agent(
-                db,
-                name="sample-agent",
-                tenant="default",
-                profile_id=_DEFAULT_PROFILE_ID,
-                credential_hash=security.hash_api_key(api_key),
-            )
-            print(f"[seed] created 'sample-agent' — API key (shown once): {api_key}")
+            # Opt-in fixed demo credential: if BOTH env vars are set (docker-compose
+            # demo), create the sample agent with a reproducible id + key so the
+            # sample-agent container can authenticate without a copy/paste step.
+            # Unset (the default / any real deploy) keeps a random key shown once.
+            fixed_id = os.environ.get("MLPEF_SAMPLE_AGENT_ID")
+            fixed_key = os.environ.get("MLPEF_SAMPLE_AGENT_API_KEY")
+            if fixed_id and fixed_key:
+                api_key = fixed_key
+                agent = crud.create_agent(
+                    db,
+                    name="sample-agent",
+                    tenant="default",
+                    profile_id=_DEFAULT_PROFILE_ID,
+                    credential_hash=security.hash_api_key(api_key),
+                    agent_id=fixed_id,
+                )
+                print(
+                    "[seed] WARNING: created 'sample-agent' with a FIXED demo "
+                    "credential from the environment — never do this in production."
+                )
+            else:
+                api_key = security.generate_api_key()
+                agent = crud.create_agent(
+                    db,
+                    name="sample-agent",
+                    tenant="default",
+                    profile_id=_DEFAULT_PROFILE_ID,
+                    credential_hash=security.hash_api_key(api_key),
+                )
+                print(f"[seed] created 'sample-agent' — API key (shown once): {api_key}")
+            print(f"[seed] sample-agent id = {agent.id}")
         else:
             print("[seed] 'sample-agent' already exists; skipping")
     finally:

@@ -46,8 +46,9 @@ include = ["common*"]
 target-version = "py312"
 line-length = 100
 src = ["common", "tests", "control-plane/control-api", "data-plane"]
-# Alembic migrations/env are framework-managed; don't lint them.
-extend-exclude = ["**/alembic/**"]
+# Alembic migrations/env are framework-managed; don't lint them. Benchmark
+# scripts deliberately import after sys.path setup (E402) and run standalone.
+extend-exclude = ["**/alembic/**", "tests/bench/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF", "PTH", "ANN"]

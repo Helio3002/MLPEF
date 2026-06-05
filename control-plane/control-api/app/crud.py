@@ -154,10 +154,18 @@ def count_agents_on_profile(db: Session, profile_id: str) -> int:
 # Agents
 # --------------------------------------------------------------------------- #
 def create_agent(
-    db: Session, *, name: str, tenant: str, profile_id: str, credential_hash: str
+    db: Session,
+    *,
+    name: str,
+    tenant: str,
+    profile_id: str,
+    credential_hash: str,
+    agent_id: str | None = None,
 ) -> Agent:
+    # `agent_id` is normally server-generated; an explicit id is only supplied by
+    # the seed script for a fixed, reproducible demo agent (see app.seed).
     agent = Agent(
-        id=uuid.uuid4().hex,
+        id=agent_id or uuid.uuid4().hex,
         name=name,
         tenant=tenant,
         profile_id=profile_id,

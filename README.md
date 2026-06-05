@@ -110,7 +110,7 @@ applicable.
 | **8** | Proxy orchestration + identity + config cache + e2e | **done** |
 | **9** | Ingress adapters + integration docs + sample agent | **done** |
 | **10** | Admin UI (RBAC-gated) | **done** |
-| 11 | `docker-compose` full stack + measured benchmarks | pending |
+| **11** | `docker-compose` full stack + benchmark harness (numbers from your run) | **done** |
 
 ### What Phase 1 delivers
 
@@ -147,3 +147,96 @@ cd data-plane && pytest                                          # Layer 5 emitt
 
 > Service dependencies (the Docker sandbox SDK, OPA) and `docker compose up` for
 > the full stack arrive in their respective phases.
+
+## Running the full stack (docker-compose)
+
+`docker compose` brings the whole platform up on one network — Postgres, the
+control-api, the admin UI, and the data-plane proxy.
+
+```bash
+cp .env.example .env          # then edit every "change-me" secret
+docker compose up --build
+```
+
+Default endpoints:
+
+| Service | URL | Notes |
+|---|---|---|
+| admin-ui | `http://localhost:8081` | log in with `MLPEF_ADMIN_*` from `.env` |
+| control-api | `http://localhost:8080` | FastAPI; `/docs` for the API |
+| proxy (ingress) | `http://localhost:8090` | data plane; `POST /v1/execute` |
+
+The control-api container migrates (`alembic upgrade head`), seeds (admin user,
+deny-most default profile, sample agent), then serves — all idempotent across
+restarts. The proxy fetches the HITL **public** verification key from the
+control-api at startup (public key only — it can verify tokens, never mint them).
+
+**Try the sample agent — a denial is the system working as intended:**
+
+```bash
+docker compose --profile demo run --rm sample-agent
+```
+
+On the seeded deny-most profile this call is **denied** (default-deny) and
+audited (`docker compose logs proxy`). To see an allow, grant the tool to the
+agent's profile in the UI (Policy Profiles → add `shell.exec` to `tool_allowlist`).
+
+> **This is a dev/demo harness, not a production deployment.** Two deliberate
+> limitations: the proxy runs with the **sandbox disabled** — L3/L4 are skipped,
+> so only L1/L2/L5 enforce (THREAT_MODEL.md R-30) — and everything is plain HTTP
+> with demo secrets (R-29, R-31). Change every secret and front it with TLS for
+> anything real.
+
+### GitHub Codespaces / remote hosts
+
+The browser must reach the control-api directly, and `VITE_API_BASE_URL` is baked
+into the UI **at build time**. On Codespaces, point both at the forwarded URLs and
+make the control-api port **Public** (GitHub's private-port gateway strips the
+CORS headers), then rebuild:
+
+```bash
+# in .env — use your forwarded hostnames
+VITE_API_BASE_URL=https://<name>-8080.app.github.dev
+MLPEF_CORS_ORIGINS=https://<name>-8081.app.github.dev
+
+docker compose up --build     # --build is required: the API URL is compiled in
+```
+
+## Benchmarks
+
+Per constraint #3, the latency budget is **split** and every number here is
+**measured on your host, never fabricated**. The harness in `tests/bench/` prints
+the table; paste your run's output into the cells below.
+
+```bash
+# Decision path (L1 Validate + L2 Policy) — target < 10 ms p99.
+# Pure-Python, no services needed.
+python tests/bench/bench_decision_path.py            # add --iters / --json as needed
+
+# Sandbox warm-pool checkout (L3) — target < 50 ms checkout.
+# Requires a reachable Docker daemon + a local image; skips cleanly without one.
+python tests/bench/bench_sandbox.py                  # add --iters / --image / --json
+```
+
+What each scenario times (and what it deliberately excludes) is documented in the
+script headers — e.g. HITL minting and ingress parsing are *not* on the measured
+decision path; container cold-start is measured only to justify the warm pool, not
+claimed as the request-path number.
+
+**Decision path — `bench_decision_path.py`** (ms; lower is better):
+
+| Scenario | Layers | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| `allow` (fs.read, jailed) | L1+L2 | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| `allow_hitl` (Ed25519 verify) | L1+L2 | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+
+**Sandbox — `bench_sandbox.py`** (ms; lower is better):
+
+| Phase | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| `warm_checkout` (request-path) | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| `cold_create` (off-path, hidden by pool) | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+
+> _TBD_ cells stay until filled from an actual run. If a measured p99 misses its
+> budget, that is recorded as a residual risk in `THREAT_MODEL.md` — we report the
+> real number, we do not move the goalposts.

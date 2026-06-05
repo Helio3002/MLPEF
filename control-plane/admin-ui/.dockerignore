@@ -1,0 +1,11 @@
+# Build-context excludes for the admin-ui image (context = this directory).
+node_modules/
+dist/
+dist-ssr/
+.env
+.env.*
+!.env.example
+*.local
+.vscode/
+Dockerfile
+.dockerignore
