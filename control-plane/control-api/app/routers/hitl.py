@@ -17,7 +17,14 @@ from .. import crud, signing
 from ..db import get_db
 from ..deps import get_current_admin, get_current_agent, require_roles
 from ..models import AdminUser, Agent
-from ..schemas import HITLApprovalOut, HITLRequestCreate, HITLRequestOut, PublicKeyOut
+from ..schemas import (
+    HITLApprovalOut,
+    HITLRequestCreate,
+    HITLRequestOut,
+    NonceConsumeIn,
+    NonceConsumeOut,
+    PublicKeyOut,
+)
 
 router = APIRouter(prefix="/hitl", tags=["hitl"])
 
@@ -32,6 +39,20 @@ def public_key() -> PublicKeyOut:
     # that mints tokens (see THREAT_MODEL.md R-8 / assume-breach: proxy verifies,
     # never mints). Making it public removes a needless bootstrap dependency.
     return PublicKeyOut(algorithm="ed25519", public_key_pem=signing.public_key_pem())
+
+
+@router.post("/consume-nonce", response_model=NonceConsumeOut)
+def consume_nonce(
+    body: NonceConsumeIn,
+    db: Annotated[Session, Depends(get_db)],
+    _agent: Annotated[Agent, Depends(get_current_agent)],
+) -> NonceConsumeOut:
+    # Shared single-use enforcement across the proxy fleet (R-2): the proxy calls
+    # this when verifying a HITL token. Agent-authenticated so only a registered
+    # identity (the proxy, acting for an agent) can consume. Returns consumed=False
+    # on a replay; the proxy turns that into a TOKEN_REPLAY deny.
+    consumed = crud.consume_nonce(db, jti=body.jti, expires_at=body.expires_at)
+    return NonceConsumeOut(consumed=consumed)
 
 
 @router.post("/requests", response_model=HITLRequestOut, status_code=status.HTTP_201_CREATED)

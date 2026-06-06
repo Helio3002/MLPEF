@@ -59,6 +59,33 @@ def test_request_requires_agent_key(client: TestClient) -> None:
     assert client.post("/hitl/requests", json={"action": "a", "resource": "r"}).status_code == 401
 
 
+def test_consume_nonce_is_single_use(client: TestClient) -> None:
+    headers = _login(client)
+    _, api_key = _register_agent(client, headers)
+    akey = {"X-Agent-Key": api_key}
+    body = {"jti": "nonce-1", "expires_at": 9_999_999_999}
+
+    first = client.post("/hitl/consume-nonce", json=body, headers=akey)
+    assert first.status_code == 200, first.text
+    assert first.json()["consumed"] is True
+
+    # Same jti again -> replay -> consumed False (the proxy turns this into a deny).
+    replay = client.post("/hitl/consume-nonce", json=body, headers=akey)
+    assert replay.status_code == 200
+    assert replay.json()["consumed"] is False
+
+    # A different jti is independent.
+    other = client.post(
+        "/hitl/consume-nonce", json={"jti": "nonce-2", "expires_at": 9_999_999_999}, headers=akey
+    )
+    assert other.json()["consumed"] is True
+
+
+def test_consume_nonce_requires_agent_key(client: TestClient) -> None:
+    resp = client.post("/hitl/consume-nonce", json={"jti": "x", "expires_at": 1})
+    assert resp.status_code == 401
+
+
 def test_deny_closes_request(client: TestClient) -> None:
     headers = _login(client)
     _, api_key = _register_agent(client, headers)

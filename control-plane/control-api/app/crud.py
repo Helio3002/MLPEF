@@ -26,6 +26,7 @@ from common import (
 )
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import security
@@ -35,6 +36,7 @@ from .models import (
     AdminUser,
     Agent,
     AuditRecordRow,
+    HitlNonceRow,
     HITLRequestRow,
     PolicyProfileRow,
     Tool,
@@ -399,3 +401,20 @@ def deny_hitl_request(db: Session, row: HITLRequestRow, *, approver_id: str) -> 
     db.commit()
     db.refresh(row)
     return row
+
+
+def consume_nonce(db: Session, *, jti: str, expires_at: int) -> bool:
+    """Atomically consume a single-use token nonce (`jti`).
+
+    Returns True on first use, False if it was already consumed (a replay). The
+    primary-key uniqueness on `jti` makes this a safe check-and-set even under
+    concurrent consumption from a scaled proxy fleet (R-2): exactly one inserter
+    wins, every other gets an IntegrityError.
+    """
+    db.add(HitlNonceRow(jti=jti, expires_at=expires_at, consumed_at=now_epoch()))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True

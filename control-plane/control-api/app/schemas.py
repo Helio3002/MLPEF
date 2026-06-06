@@ -121,3 +121,13 @@ class HITLApprovalOut(BaseModel):
 class PublicKeyOut(BaseModel):
     algorithm: str
     public_key_pem: str
+
+
+class NonceConsumeIn(BaseModel):
+    jti: str
+    expires_at: int
+
+
+class NonceConsumeOut(BaseModel):
+    # True if this call consumed the nonce for the first time; False = replay.
+    consumed: bool

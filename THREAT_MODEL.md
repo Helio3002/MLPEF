@@ -106,7 +106,7 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-3 | Lexical path jail + traversal/encoding rejection | L1 | path-traversal tool abuse | **[IMPL][TEST]** (P4) · symlink [L3/P6] |
 | C-4 | `argv`-only construction + metacharacter rejection | L1 | command injection | **[IMPL][TEST]** (P4) |
 | C-5 | Default-deny ABAC (`default allow = false`) | L2 | T-1, EoP | **[IMPL][TEST]** native+rego (P5) · WASM build [P8] |
-| C-6 | **HITL token**: signed, scoped, single-use, expiring | L2 | T-2, T-3, EoP | **[IMPL][TEST]** (P1) · L2 + control-plane mint wired (P5) |
+| C-6 | **HITL token**: signed, scoped, single-use, expiring | L2 | T-2, T-3, EoP | **[IMPL][TEST]** (P1) · L2 + control-plane mint wired (P5) · shared Postgres nonce ledger for fleet-wide single-use (hardening, R-2) |
 | C-7 | Asymmetric signing (proxy holds public key only) | L2 | forgery under breach | **[IMPL][TEST]** |
 | C-8 | Sandbox hardening (ro-rootfs, cap-drop, no-new-privs, non-root, seccomp) | L3 | containment, EoP | **[IMPL][TEST]** config (P6) · live escape tests need Docker |
 | C-9 | cgroup CPU/mem/pids limits + timeout | L3 | DoS, runaway tools | **[IMPL][TEST]** (P6) |
@@ -128,7 +128,7 @@ defense-in-depth stack.
 | ID | Residual risk | Severity | Mitigation / plan | Status |
 |---|---|---|---|---|
 | R-1 | **Gateway bypass** — agents not routed through an MLPEF ingress adapter are entirely unguarded. | HIGH | Adapters shipped P9 (MCP/OpenAI/REST/SDK) to maximize the mandatory ingress surface; enforce routing via network policy / egress lockdown at deploy. Coverage = mandatory ingress, not magic. | Accepted + documented |
-| R-2 | In-memory `NonceStore` is per-process; a horizontally-scaled proxy fleet could allow a replay across instances. | MEDIUM | Bind nonce ledger to shared store (Postgres/Redis) with atomic check-and-set. | Open → P2/P8 |
+| R-2 | Single-use token replay across a horizontally-scaled proxy fleet. | MEDIUM | **Mitigated (hardening):** a shared Postgres ledger (`hitl_nonces`, `jti` primary key) with an atomic insert-or-conflict consume, exposed as agent-authenticated `POST /hitl/consume-nonce`; the proxy's `HttpNonceStore` consumes there, so single-use holds fleet-wide and a store/transport failure fails closed (deny). Residual: adds a control-plane hop on the (rare, human-gated) HITL-token path; the in-process `InMemoryNonceStore` stays the single-instance default and MUST be swapped for the shared ledger when scaling (env-gated, `MLPEF_NONCE_URL`). | Mitigated + documented |
 | R-3 | Token verification `leeway_seconds` (clock skew) widens the valid window slightly. | LOW | Default leeway = 0; keep control-plane/proxy clocks synced (NTP). | Accepted |
 | R-4 | Output filtering (entropy/pattern) has false negatives; it is not full DLP. | MEDIUM | Implemented P7 (scan + redact); residual FN accepted — layer with provider DLP, tune patterns, add an optional quarantine mode. | Implemented (P7); residual accepted |
 | R-5 | Docker is a weaker isolation boundary than a VM/microVM; sandbox escape is conceivable. | MEDIUM–HIGH | `SandboxBackend` interface allows gVisor/Firecracker swap; harden + test escapes. | Open → P6 |
@@ -251,3 +251,11 @@ defense-in-depth stack.
   verified last-known-good is still served on a tamper attempt. Closes the
   "proxy trusts TLS only" gap (C-17, R-12). Covered by `tests/unit/test_config_signing.py`
   and a control-api end-to-end signature check.
+- **Hardening — R-2 (shared nonce ledger):** added a Postgres `hitl_nonces` table
+  (`jti` primary key) + an atomic `crud.consume_nonce` (insert, or IntegrityError →
+  replay) behind agent-authenticated `POST /hitl/consume-nonce`. The proxy's
+  `HttpNonceStore` consumes there so HITL token single-use holds across a
+  horizontally-scaled fleet, not just per process — fail-closed on a store error.
+  Env-gated (`MLPEF_NONCE_URL`); the in-process `InMemoryNonceStore` stays the
+  single-instance default. Migration `0004_hitl_nonces`; covered by control-api
+  endpoint tests (first-use vs replay, auth required).

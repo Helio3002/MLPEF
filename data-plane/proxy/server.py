@@ -35,6 +35,7 @@ from common import (
     AuditEvent,
     InMemoryNonceStore,
     Intent,
+    NonceStore,
     SandboxLimits,
     load_public_key_pem,
 )
@@ -47,6 +48,7 @@ from layer5_audit import Auditor, AuditSink, HttpAuditSink
 
 from .config_cache import ConfigCache
 from .http_config import HttpConfigFetcher
+from .nonce_store import HttpNonceStore
 from .pipeline import Pipeline
 from .proxy import Proxy
 
@@ -122,6 +124,20 @@ def _build_audit_sink() -> AuditSink:
     return StdoutAuditSink()
 
 
+def _build_nonce_store() -> NonceStore:
+    nonce_url = os.getenv("MLPEF_NONCE_URL")
+    nonce_key = os.getenv("MLPEF_NONCE_AGENT_KEY")
+    if nonce_url and nonce_key:
+        print(f"[server] single-use nonces via control-plane ledger at {nonce_url}",
+              file=sys.stderr)
+        return HttpNonceStore(nonce_url, nonce_key)
+    # In-process is correct for a single instance; a scaled fleet MUST set
+    # MLPEF_NONCE_URL so single-use holds across instances (R-2).
+    print("[server] single-use nonces in-process (set MLPEF_NONCE_URL for a scaled fleet)",
+          file=sys.stderr)
+    return InMemoryNonceStore()
+
+
 def _no_sandbox(_intent: Intent) -> list[str] | None:
     """Demo command builder: never executes code (L3/L4 skipped). See module docstring."""
     return None
@@ -146,7 +162,7 @@ def build_app() -> FastAPI:
 
     pipeline = Pipeline(
         public_key=public_key,
-        nonce_store=InMemoryNonceStore(),
+        nonce_store=_build_nonce_store(),
         sandbox_pool=pool,
         auditor=Auditor(_build_audit_sink()),
         command_builder=_no_sandbox,

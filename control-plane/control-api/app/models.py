@@ -127,3 +127,20 @@ class HITLRequestRow(Base):
     token_jti: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class HitlNonceRow(Base):
+    """Single-use ledger of consumed HITL approval-token nonces (`jti`).
+
+    The proxy consumes a token's `jti` here via an atomic insert after verifying
+    it; a duplicate insert (primary-key conflict) means the token was already
+    used — a replay. A *shared* table makes single-use hold across a
+    horizontally-scaled proxy fleet (R-2), unlike a per-process in-memory store.
+    `expires_at` lets a sweeper prune rows once their tokens can no longer verify.
+    """
+
+    __tablename__ = "hitl_nonces"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[int] = mapped_column(Integer)
+    consumed_at: Mapped[int] = mapped_column(Integer)
