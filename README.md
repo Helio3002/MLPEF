@@ -177,9 +177,11 @@ control-api at startup (public key only — it can verify tokens, never mint the
 docker compose --profile demo run --rm sample-agent
 ```
 
-On the seeded deny-most profile this call is **denied** (default-deny) and
-audited (`docker compose logs proxy`). To see an allow, grant the tool to the
-agent's profile in the UI (Policy Profiles → add `shell.exec` to `tool_allowlist`).
+On the seeded deny-most profile this call is **denied** (default-deny). The
+denial lands in the control-plane store, so open the UI **Audit Explorer** to see
+the record, expand its five-layer trace, and click chain-verify. To see an allow,
+grant the tool in the UI (Policy Profiles → add `shell.exec` to `tool_allowlist`)
+— with the sandbox off the verdict is ALLOW with empty output (L3/L4 skipped).
 
 > **This is a dev/demo harness, not a production deployment.** Two deliberate
 > limitations: the proxy runs with the **sandbox disabled** — L3/L4 are skipped,

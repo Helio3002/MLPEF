@@ -96,8 +96,13 @@ services:
         condition: service_healthy
     environment:
       MLPEF_CONTROL_PLANE_URL: http://control-api:8080
-      # Audit goes to stdout by default (docker compose logs proxy). To POST to
-      # the control-plane store instead, set MLPEF_AUDIT_URL + MLPEF_AUDIT_AGENT_KEY.
+      # Send audit events to the control-plane store so the UI Audit Explorer +
+      # chain verification show the demo end-to-end. This works because the demo
+      # drives traffic as the single seeded sample-agent — the store binds each
+      # event to the authenticated agent (THREAT_MODEL.md R-17). If the demo key
+      # is unset, the proxy falls back to stdout auditing automatically.
+      MLPEF_AUDIT_URL: http://control-api:8080
+      MLPEF_AUDIT_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
     ports:
       - "8090:8090"
     healthcheck:
