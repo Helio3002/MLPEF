@@ -32,6 +32,7 @@ proxy = [
     "uvicorn[standard]>=0.29",
     "httpx>=0.27",  # config-bundle pull + audit emit; ingress HTTP clients
     "docker>=7.0",  # Layer 3 sandbox backend
+    "mcp>=1.2",  # runnable MCP gateway server (ingress.mcp_server); stdio + SSE
 ]
 
 [build-system]

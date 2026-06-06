@@ -214,13 +214,17 @@ Session token lives in `localStorage` (R-11).
   unskippable L5; maps a `command_builder` (which tools execute code).
 - **`proxy/nonce_store.py`** — `HttpNonceStore`: consumes single-use nonces via the
   control-plane ledger for fleet-wide single-use (R-2); in-memory is the default.
-- **`proxy/server.py`** — the runnable entrypoint (`uvicorn proxy.server:app`):
-  builds everything from env (fetch public key, choose audit sink / nonce store /
-  sandbox), exposes the ingress app.
+- **`proxy/builder.py`** — `build_proxy()`: assembles the Proxy from env (fetch
+  public key, signed-config cache, audit sink, nonce store, sandbox policy). No
+  import-time side effects, so both entrypoints reuse it.
+- **`proxy/server.py`** — the HTTP entrypoint (`uvicorn proxy.server:app`):
+  `create_app(build_proxy())`, serving the REST + OpenAI ingress.
 - **`ingress/`** — `base.py` (the canonical `Intent` builder + `GovernedHandler`
   protocol), `rest.py` (`/v1/execute`), `openai_compat.py` (`/openai/v1/tool-calls`),
-  `mcp_gateway.py`, `sdk_shims/` (decorator + LangChain wrapper). **Every adapter
-  produces the same `Intent` and hits the identical pipeline.**
+  `mcp_gateway.py` (the `McpGateway` enforcement core) + `mcp_server.py` (a
+  **runnable** MCP server over stdio/SSE for no-code MCP integration),
+  `sdk_shims/` (decorator + LangChain wrapper). **Every adapter produces the same
+  `Intent` and hits the identical pipeline.**
 
 ---
 

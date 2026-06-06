@@ -18,7 +18,8 @@ control→threat mapping and residual risks, see [`THREAT_MODEL.md`](THREAT_MODE
 | **postgres** | System of record (agents, profiles, tools, audit chain, HITL, nonces) | 5432 | `postgres:16-alpine` |
 | **control-api** | Control plane: registration, profiles, HITL mint, audit store, RBAC | 8080 | `control-plane/control-api/Dockerfile` |
 | **admin-ui** | React portal (talks only to control-api; reverse-proxies it under `/api`) | 8081 | `control-plane/admin-ui/Dockerfile` |
-| **proxy** | Data plane: the 5-layer enforcement pipeline + ingress adapters | 8090 | `data-plane/Dockerfile` |
+| **proxy** | Data plane: the 5-layer enforcement pipeline + REST/OpenAI ingress | 8090 | `data-plane/Dockerfile` |
+| **mcp-gateway** *(profile `mcp`)* | Runnable MCP server fronting tools; governs MCP agents (no agent code) | 9000 | `data-plane/Dockerfile` |
 
 **Control plane = config & visibility. Data plane = enforcement.** They are
 separate services so the proxy scales horizontally and keeps enforcing (on cached,
@@ -250,6 +251,52 @@ integration notes are in `data-plane/ingress/README.md`.
 > **Coverage = mandatory ingress.** If an agent can reach a tool *without* going
 > through one of these adapters, MLPEF cannot govern that call (R-1). Enforce
 > routing with network policy / egress lockdown so the proxy is the only path out.
+
+### 10.4 No-code MCP integration (point an agent at MLPEF)
+
+If your agent speaks **MCP** (Claude Desktop, Cline, Cursor, LangGraph via
+`langchain-mcp-adapters`, …), you integrate by **configuration only** — no code.
+MLPEF ships a runnable MCP gateway server that fronts your tools and enforces every
+`tools/call` through the pipeline.
+
+**1. Prepare (UI, no code):** register an agent (copy its API key), assign a profile
+that allowlists the tools you want exposed, and register those tools.
+
+**2. Run the gateway:**
+```bash
+# set the agent identity in .env (or reuse the demo agent):
+#   MLPEF_SAMPLE_AGENT_ID / MLPEF_SAMPLE_AGENT_API_KEY  (or MLPEF_MCP_AGENT_ID/_KEY)
+docker compose --profile mcp up --build
+# → MCP gateway (SSE) at  http://localhost:9000/sse
+```
+Configure it with env (compose sets sensible defaults): `MLPEF_MCP_AGENT_ID`,
+`MLPEF_MCP_AGENT_KEY`, `MLPEF_MCP_TOOLS` (comma-separated tool names),
+`MLPEF_MCP_TRANSPORT` (`sse` default, or `stdio`), `MLPEF_MCP_PORT`.
+
+**3. Point your agent at it (config only):**
+
+- **URL/SSE clients** (Cline, Cursor, LangGraph) — add an MCP server with URL
+  `http://<host>:9000/sse`.
+  ```python
+  # LangGraph / LangChain via langchain-mcp-adapters — zero tool code:
+  from langchain_mcp_adapters.client import MultiServerMCPClient
+  client = MultiServerMCPClient({"mlpef": {"url": "http://localhost:9000/sse",
+                                           "transport": "sse"}})
+  tools = await client.get_tools()      # already governed by MLPEF
+  ```
+- **stdio clients** (e.g. Claude Desktop's `mcpServers` config) — run the gateway
+  in stdio mode by launching it with `MLPEF_MCP_TRANSPORT=stdio` and the agent
+  env, e.g. a config entry that runs `python -m ingress.mcp_server` with
+  `MLPEF_MCP_AGENT_ID` / `MLPEF_MCP_AGENT_KEY` / `MLPEF_CONTROL_PLANE_URL` set.
+
+That's it — the agent's tool calls now flow `agent → MLPEF MCP gateway → pipeline`.
+Denied calls come back as a readable `[mlpef:deny] …` tool message the model reads;
+HITL-gated calls return the reason, and the agent retries with `approval_token`
+once an operator approves in the UI.
+
+> One gateway instance acts as **one** registered agent (MCP's basic transports
+> carry no per-call credential). Run one gateway per agent identity, and still
+> enforce that the agent can't reach tools except through it (R-1).
 
 ---
 

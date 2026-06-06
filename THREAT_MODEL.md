@@ -158,6 +158,7 @@ defense-in-depth stack.
 | R-29 | The `docker-compose` stack ships **dev defaults**: `.env.example` carries placeholder passwords, and when `MLPEF_SAMPLE_AGENT_ID`/`_API_KEY` are set the seed creates a sample agent with a **fixed, reproducible credential** (demo convenience). | HIGH (ops) | `.env.example` flags every secret "change-me"; the fixed-credential path warns loudly at seed time and is opt-in (unset → random key shown once); never deploy the demo `.env`. Compose is a dev/demo harness, not a prod manifest. | Accepted + documented |
 | R-30 | Enabling real L3/L4 execution requires the proxy to reach a Docker daemon; the provided overlay mounts the host `docker.sock`, a **privileged** boundary (host-root-equivalent). | MEDIUM | Default stays sandbox-**off** (no socket; only L1/L2/L5 run). Execution is now opt-in via `MLPEF_SANDBOX_ENABLED=true` + the `docker-compose.sandbox.yml` overlay, which wires the pre-warmed `DockerSandboxBackend` + real `command_builder` and hardens every container (read-only rootfs, caps dropped, no-new-privileges, non-root, default seccomp, network off). The host-socket mount is the residual: for production use a rootless/remote daemon, a dedicated sandbox host, or gVisor/Firecracker (R-5). | Opt-in + documented |
 | R-31 | The demo stack serves the admin UI and APIs over **plain HTTP** with no TLS, and `VITE_API_BASE_URL` is **baked into the UI bundle at build time**; bearer tokens and agent keys therefore traverse cleartext locally and the UI must be rebuilt to retarget the API. | MEDIUM | Terminate TLS at a reverse proxy / ingress in front of every service for anything beyond localhost; rebuild the UI per environment (or move to runtime config). Reinforces R-11 (token storage). | Open → deploy |
+| R-32 | The runnable MCP gateway (`ingress.mcp_server`) acts as **one** registered agent, and its SSE/stdio transport carries **no per-connection authentication** — anyone who can reach the gateway port can issue tool calls as that agent. | MEDIUM | Network-restrict the gateway port to the intended agent (it is not an internet-facing endpoint); run one gateway per agent identity; front it with mTLS / an authenticating proxy if it must be exposed. Every call is still fully enforced by L1..L5, so the blast radius is bounded by that agent's (least-privilege) profile. | Documented |
 
 ## 8. Change log
 
@@ -268,3 +269,11 @@ defense-in-depth stack.
   residual (prefer rootless/remote Docker or gVisor/Firecracker, R-5). The L3/L4
   components are already covered by the layer-3/4 unit + docker-integration tests and
   the `bench_sandbox` harness.
+- **Integration — runnable MCP gateway:** `ingress/mcp_server.py` turns the tested
+  `McpGateway` into a standalone MCP server (stdio + SSE, tools/agent configured by
+  env), so any MCP-capable agent is governed by configuration alone — no agent code.
+  Proxy assembly was extracted to `proxy/builder.build_proxy` (no import-time side
+  effects) and reused by both the HTTP and MCP entrypoints; added a `mcp` profile
+  service to compose. Added residual R-32 (the gateway acts as one agent and its
+  transport has no per-connection auth — network-restrict the port; L1..L5 still
+  bound the blast radius).

@@ -124,6 +124,38 @@ services:
       retries: 30
       start_period: 20s
 
+  # MLPEF MCP gateway — point any MCP-capable agent (Claude Desktop, Cline,
+  # Cursor, LangGraph via langchain-mcp-adapters, …) at http://localhost:9000/sse
+  # and its tool calls are governed by the full pipeline, no agent code changes.
+  # Profile-gated (needs MLPEF_SAMPLE_AGENT_API_KEY set) so `up` stays clean:
+  #   docker compose --profile mcp up --build
+  # Represents ONE registered agent identity (set MLPEF_MCP_AGENT_* to use another).
+  mcp-gateway:
+    build:
+      context: .
+      dockerfile: data-plane/Dockerfile
+    profiles: ["mcp"]
+    restart: unless-stopped
+    depends_on:
+      control-api:
+        condition: service_healthy
+    environment:
+      MLPEF_CONTROL_PLANE_URL: http://control-api:8080
+      MLPEF_MCP_AGENT_ID: ${MLPEF_SAMPLE_AGENT_ID:-sample-agent-demo}
+      MLPEF_MCP_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
+      MLPEF_MCP_TENANT: default
+      MLPEF_MCP_TOOLS: "fs.read,fs.write,shell.exec,http.get"
+      MLPEF_MCP_TRANSPORT: sse
+      MLPEF_MCP_PORT: "9000"
+      # Govern this path identically to the HTTP proxy (audit + shared nonce ledger).
+      MLPEF_AUDIT_URL: http://control-api:8080
+      MLPEF_AUDIT_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
+      MLPEF_NONCE_URL: http://control-api:8080
+      MLPEF_NONCE_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
+    command: ["python", "-m", "ingress.mcp_server"]
+    ports:
+      - "9000:9000"
+
   # Demo driver: calls a tool through the proxy with the seeded sample-agent
   # credential. One-shot (exits). Profile-gated so `up` stays clean.
   sample-agent:
