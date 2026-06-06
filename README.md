@@ -13,6 +13,13 @@ It has two planes:
   profiles, approve human-in-the-loop (HITL) requests, and read the audit trail,
   via an admin web portal.
 
+## Documentation
+
+- [`AGENT_SETUP.md`](AGENT_SETUP.md) — **connect any agent** (MCP / OpenAI / REST / in-process), with copy-paste config per framework.
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — setup, configuration, adding agents, and production hardening.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — how it works end to end (the inside-out deep dive).
+- [`THREAT_MODEL.md`](THREAT_MODEL.md) — controls ↔ threats (STRIDE + OWASP-LLM) + the residual-risk register.
+
 ## What MLPEF does and does not claim
 
 MLPEF is **measurable defense-in-depth, not a guarantee.** Please read these

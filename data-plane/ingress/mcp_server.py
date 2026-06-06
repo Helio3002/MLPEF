@@ -145,6 +145,31 @@ def _run_sse(server: Server, init_options: InitializationOptions, host: str, por
     uvicorn.run(app, host=host, port=port)
 
 
+def _run_streamable_http(server: Server, host: str, port: int) -> None:
+    # The modern MCP HTTP transport (single /mcp endpoint). Newer clients prefer
+    # this over SSE; the SDK owns the wire details so it stays version-correct.
+    import contextlib
+    from collections.abc import AsyncIterator
+
+    import uvicorn
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    manager = StreamableHTTPSessionManager(app=server, stateless=True)
+
+    async def handle_mcp(scope: Any, receive: Any, send: Any) -> None:
+        await manager.handle_request(scope, receive, send)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: Starlette) -> AsyncIterator[None]:
+        async with manager.run():
+            yield
+
+    app = Starlette(routes=[Mount("/mcp", app=handle_mcp)], lifespan=lifespan)
+    uvicorn.run(app, host=host, port=port)
+
+
 def main() -> int:
     agent_id = os.environ.get("MLPEF_MCP_AGENT_ID")
     agent_key = os.environ.get("MLPEF_MCP_AGENT_KEY")
@@ -162,13 +187,17 @@ def main() -> int:
     server = _build_server(gateway, tool_names)
     init_options = _init_options(server)
 
+    host = os.environ.get("MLPEF_MCP_HOST", "0.0.0.0")
+    port = int(os.environ.get("MLPEF_MCP_PORT", "9000"))
     if transport == "stdio":
         print(f"[mcp] MLPEF MCP gateway (stdio) as agent {agent_id}; tools={tool_names}",
               file=sys.stderr)
         _run_stdio(server, init_options)
+    elif transport in ("streamable-http", "streamable_http", "http"):
+        print(f"[mcp] MLPEF MCP gateway (streamable-http) on {host}:{port}/mcp as agent "
+              f"{agent_id}; tools={tool_names}", file=sys.stderr)
+        _run_streamable_http(server, host, port)
     else:
-        host = os.environ.get("MLPEF_MCP_HOST", "0.0.0.0")
-        port = int(os.environ.get("MLPEF_MCP_PORT", "9000"))
         print(f"[mcp] MLPEF MCP gateway (SSE) on {host}:{port}/sse as agent {agent_id}; "
               f"tools={tool_names}", file=sys.stderr)
         _run_sse(server, init_options, host, port)
