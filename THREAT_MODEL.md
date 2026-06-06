@@ -117,7 +117,7 @@ Legend: **[IMPL]** implemented in Phase 1 · **[TEST]** has an adversarial test 
 | C-14 | Unskippable audit on every path incl. deny/error | L5 | Repudiation | **[IMPL][TEST]** emitter (P3) + pipeline all-paths (P8) |
 | C-15 | Fail-closed orchestration (exception/timeout → deny) | Pipeline | DoS, ambiguity | **[IMPL][TEST]** error model (P1) + orchestrator (P8) |
 | C-16 | Identity resolution from credential; admin RBAC | Identity | Spoofing (T-2 cross-agent) | **[IMPL]** cred→identity (P2) + proxy resolution (P8) · mTLS [future] |
-| C-17 | Config bundle (etag + version) + cache/hot-reload + signing | Pipeline | config tampering, availability | **[IMPL][TEST]** endpoint (P2) + cache/hot-reload/last-known-good (P8) · signing [R-12] |
+| C-17 | Config bundle (etag + version) + cache/hot-reload + Ed25519 signing/verify | Pipeline | config tampering, availability | **[IMPL][TEST]** endpoint (P2) + cache/hot-reload/last-known-good (P8) + control-plane-signed bundle verified by the proxy before apply (hardening) |
 | C-18 | Safe-by-default (deny-most) profile at registration | Control plane | T-1 for unconfigured agents | [IMPL] schema (P1) + flow (P2) |
 
 ## 7. Residual risk register
@@ -138,7 +138,7 @@ defense-in-depth stack.
 | R-9 | The LLM remains attacker-controlled by design. | (by design) | All guarantees are deterministic and downstream of the model; never trust model output as a decision input. | Accepted |
 | R-10 | Side/covert channels out of the sandbox (timing, resource). | LOW | cgroup limits; minimal egress; document. | Accepted → P6 |
 | R-11 | Admin session bearer tokens are stored in browser `localStorage` (XSS could exfiltrate) and lack rotation/CSRF. | MEDIUM | Short TTL; HTTPS-only; CSP on the UI; consider an httpOnly cookie + CSRF token; rotation. | Open → hardening |
-| R-12 | Config bundle is not yet cryptographically signed; the proxy trusts transport (TLS) only. | MEDIUM | Sign the bundle with the control-plane key (reuse token lib); proxy verifies. | Open → P8 |
+| R-12 | Config bundle authenticity beyond TLS. | MEDIUM | **Mitigated (hardening):** the control plane Ed25519-signs every bundle (distinct domain tag from HITL tokens) and the proxy verifies it against the public key it already holds *before applying or caching it*; an unsigned, malformed, or forged bundle is refused (fail closed → `ConfigBundleUntrusted` / `config_untrusted`, a security event), with verified last-known-good still served on a tamper attempt. Residual: reuses the HITL signing key (no separate config key / rotation yet); a rejected bundle is not yet surfaced as its own audited alert. | Mitigated + documented |
 | R-13 | Seed uses default admin password `admin` if `MLPEF_ADMIN_PASSWORD` is unset. | HIGH (ops) | Seed warns loudly; deploy docs require setting it; no default in compose/prod. | Mitigated + documented |
 | R-14 | Agent API keys are stored as plain SHA-256 (no slow hash). | LOW | Acceptable for 256-bit random keys (no brute-force surface); a slow hash would be required only for low-entropy secrets. | Accepted |
 | R-15 | `Agent.tenant` and `PolicyProfile.tenant` are not enforced to match; an admin can assign a cross-tenant profile. | LOW | Enforce tenant alignment at registration/assignment in P8; RBAC already gates who can assign. | Open → P8 |
@@ -242,3 +242,12 @@ defense-in-depth stack.
   Added residual risks R-29 (compose dev secrets + fixed demo agent credential),
   R-30 (sandbox disabled in compose; enabling needs a privileged docker socket),
   and R-31 (no TLS + build-time-baked UI API URL in the demo).
+- **Hardening — R-12 (config-bundle signing):** the control plane now Ed25519-signs
+  every `ConfigBundle` (`common.sign_config_bundle`, distinct domain tag from HITL
+  tokens), and the proxy verifies the signature (`common.verify_config_bundle`)
+  against the public key it already fetches — *before* applying or caching the
+  bundle. An unsigned/forged bundle is refused fail-closed via the new
+  `ConfigBundleUntrusted` error + `config_untrusted` reason code (a security event);
+  verified last-known-good is still served on a tamper attempt. Closes the
+  "proxy trusts TLS only" gap (C-17, R-12). Covered by `tests/unit/test_config_signing.py`
+  and a control-api end-to-end signature check.

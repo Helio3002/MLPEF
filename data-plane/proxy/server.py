@@ -133,7 +133,12 @@ def build_app() -> FastAPI:
     leeway_seconds = int(_env("MLPEF_HITL_LEEWAY_SECONDS", "0"))
 
     public_key = _fetch_public_key(control_plane_url)
-    cache = ConfigCache(HttpConfigFetcher(control_plane_url), ttl_seconds=ttl_seconds)
+    # Pass the public key so the fetcher verifies each bundle's signature before
+    # the proxy applies it (R-12): config is authenticated, not just trusted via TLS.
+    cache = ConfigCache(
+        HttpConfigFetcher(control_plane_url, public_key=public_key),
+        ttl_seconds=ttl_seconds,
+    )
 
     # Sandbox disabled for the demo: size-0 pool + a command builder that returns
     # None means `backend.create` is never called, so Docker is never required.

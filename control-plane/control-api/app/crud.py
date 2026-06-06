@@ -21,6 +21,7 @@ from common import (
     mint_hitl_token,
     now_epoch,
     seal_event,
+    sign_config_bundle,
     verify_chain,
 )
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -235,20 +236,29 @@ def delete_tool(db: Session, tool: Tool) -> None:
 # --------------------------------------------------------------------------- #
 # Config bundle (pulled by the proxy)
 # --------------------------------------------------------------------------- #
-def build_config_bundle(db: Session, agent: Agent) -> ConfigBundle | None:
+def build_config_bundle(
+    db: Session, agent: Agent, *, private_key: Ed25519PrivateKey | None = None
+) -> ConfigBundle | None:
     row = db.get(PolicyProfileRow, agent.profile_id)
     if row is None:
         return None
     profile = PolicyProfile.model_validate(row.definition)
     canonical = json.dumps(row.definition, sort_keys=True, separators=(",", ":"))
     etag = hashlib.sha256(f"{row.version}:{canonical}".encode()).hexdigest()[:32]
-    return ConfigBundle(
+    bundle = ConfigBundle(
         agent_id=agent.id,
         profile=profile,
         issued_at=now_epoch(),
         bundle_version=row.version,
         etag=etag,
     )
+    # Sign so the proxy can authenticate the bundle, not merely trust TLS. The
+    # proxy holds the public key only and verifies before applying it (R-12).
+    if private_key is not None:
+        bundle = bundle.model_copy(
+            update={"signature": sign_config_bundle(bundle, private_key)}
+        )
+    return bundle
 
 
 # --------------------------------------------------------------------------- #

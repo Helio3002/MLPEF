@@ -13,7 +13,7 @@ from common import ConfigBundle
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .. import crud, security
+from .. import crud, security, signing
 from ..db import get_db
 from ..deps import get_current_admin, get_current_agent, require_roles
 from ..models import AdminUser, Agent
@@ -126,7 +126,8 @@ def config_bundle(
     # The agent authenticates with its own API key; it may only pull its own bundle.
     if agent.id != agent_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "agent key does not match this agent")
-    bundle = crud.build_config_bundle(db, agent)
+    # Sign the bundle so the proxy can verify it came from the control plane (R-12).
+    bundle = crud.build_config_bundle(db, agent, private_key=signing.signing_key())
     if bundle is None:
         # Fail closed: a missing profile is an error, not an allow-all.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no profile resolved for agent")

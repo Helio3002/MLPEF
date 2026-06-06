@@ -188,6 +188,22 @@ class IdentityUnresolved(MLPEFError):
     security_event: ClassVar[bool] = True
 
 
+class ConfigBundleUntrusted(MLPEFError):
+    """A config bundle was unsigned or its signature failed to verify.
+
+    Under assume-breach the proxy must not apply policy config it cannot
+    authenticate as coming from the control plane (TLS alone is insufficient — a
+    compromised network position or impersonated control plane could inject a
+    permissive bundle). Fail closed: the cache treats this like a fetch failure
+    (serve verified last-known-good if present, else deny) and never applies the
+    untrusted bundle. Flagged as a security event.
+    """
+
+    reason_code: ClassVar[DenyReasonCode] = DenyReasonCode.CONFIG_UNTRUSTED
+    layer: ClassVar[LayerName] = LayerName.PIPELINE
+    security_event: ClassVar[bool] = True
+
+
 class AuditFailure(MLPEFError):
     """The unskippable audit write failed — the whole call must fail closed."""
 

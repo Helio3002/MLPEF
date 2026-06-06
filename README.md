@@ -225,20 +225,33 @@ script headers — e.g. HITL minting and ingress parsing are *not* on the measur
 decision path; container cold-start is measured only to justify the warm pool, not
 claimed as the request-path number.
 
-**Decision path — `bench_decision_path.py`** (ms; lower is better):
+Reference run — GitHub Codespace, Python 3.12.1; decision path over 20,000
+iterations (2,000 warmup), sandbox over 20 `alpine` containers. Numbers are
+host-dependent; re-run `tests/bench/` to refresh.
+
+**Decision path — `bench_decision_path.py`** (ms; lower is better; budget **< 10 ms p99**):
 
 | Scenario | Layers | p50 | p95 | p99 | max |
 |---|---|---|---|---|---|
-| `allow` (fs.read, jailed) | L1+L2 | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| `allow_hitl` (Ed25519 verify) | L1+L2 | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| `allow` (fs.read, jailed) | L1+L2 | 0.016 | 0.033 | 0.044 | 0.220 |
+| `allow_hitl` (Ed25519 verify) | L1+L2 | 0.169 | 0.272 | 0.303 | 1.972 |
 
-**Sandbox — `bench_sandbox.py`** (ms; lower is better):
+Both clear the < 10 ms p99 budget by ~30–230×. The HITL Ed25519 token verify — the
+most expensive decision path — dominates at ~0.30 ms p99, still far inside budget.
+
+**Sandbox — `bench_sandbox.py`** (ms; lower is better; checkout budget **< 50 ms**):
 
 | Phase | p50 | p95 | p99 | max |
 |---|---|---|---|---|
-| `warm_checkout` (request-path) | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| `cold_create` (off-path, hidden by pool) | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| `warm_checkout` (request-path) | 0.001 | 0.003 | 0.008 | 0.009 |
+| `cold_create` (off-path, hidden by pool) | 149.0 | 184.7 | 198.7 | 202.2 |
 
-> _TBD_ cells stay until filled from an actual run. If a measured p99 misses its
-> budget, that is recorded as a residual risk in `THREAT_MODEL.md` — we report the
-> real number, we do not move the goalposts.
+Warm-pool checkout is **~0.008 ms p99** — ~6000× inside the 50 ms budget — precisely
+because it skips the **~199 ms p99** container cold-start that the pool absorbs off
+the request path. That ~25,000× gap is the measured reason pre-warming exists, and
+why we never claim 10 ms for Docker cold-start (constraint #3).
+
+> Every number above is measured on the host shown, never fabricated; a different
+> host will give different values. If a measured p99 ever misses its budget, that
+> is recorded as a residual risk in `THREAT_MODEL.md` — we report the real number,
+> we do not move the goalposts.

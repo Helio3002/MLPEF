@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+from common import (
+    ConfigBundle,
+    ConfigBundleUntrusted,
+    load_public_key_pem,
+    verify_config_bundle,
+)
 from fastapi.testclient import TestClient
 
 
@@ -48,6 +55,29 @@ def test_config_bundle_requires_matching_agent_key(client: TestClient) -> None:
 
     # No agent key -> 401 (fail closed).
     assert client.get(f"/agents/{agent_id}/config-bundle").status_code == 401
+
+
+def test_config_bundle_is_signed_and_verifies(client: TestClient) -> None:
+    headers = _login(client)
+    reg = client.post("/agents", json={"name": "agent-signed"}, headers=headers).json()
+    agent_id, api_key = reg["id"], reg["api_key"]
+
+    resp = client.get(f"/agents/{agent_id}/config-bundle", headers={"X-Agent-Key": api_key})
+    assert resp.status_code == 200, resp.text
+    bundle_json = resp.json()
+    assert bundle_json["signature"], "config bundle must be signed (R-12)"
+
+    # The proxy fetches this same (public) key and verifies the bundle.
+    pem = client.get("/hitl/public-key").json()["public_key_pem"]
+    public_key = load_public_key_pem(pem.encode("utf-8"))
+    bundle = ConfigBundle.model_validate(bundle_json)
+    verify_config_bundle(bundle, public_key)  # no raise == authentic
+
+    # Flipping one signature character must fail verification (fail closed).
+    sig = bundle.signature or ""
+    flipped = ("A" if sig[:1] != "A" else "B") + sig[1:]
+    with pytest.raises(ConfigBundleUntrusted):
+        verify_config_bundle(bundle.model_copy(update={"signature": flipped}), public_key)
 
 
 def test_rbac_blocks_unauthenticated_write(client: TestClient) -> None:

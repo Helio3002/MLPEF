@@ -17,6 +17,7 @@ from .audit import (
     seal_event,
     verify_chain,
 )
+from .config_signing import sign_config_bundle, verify_config_bundle
 from .decision import LayerDecision, PipelineResult
 from .enums import (
     DenyReasonCode,
@@ -28,6 +29,7 @@ from .enums import (
 from .errors import (
     AuditFailure,
     CommandInjectionAttempt,
+    ConfigBundleUntrusted,
     ConfigUnavailable,
     DefaultDenied,
     EgressBlocked,
@@ -87,6 +89,7 @@ __all__ = [
     "CommandInjectionAttempt",
     # profiles
     "ConfigBundle",
+    "ConfigBundleUntrusted",
     "ConfigUnavailable",
     "ConfigUnavailable",
     "DefaultDenied",
@@ -178,6 +181,8 @@ __all__ = [
     "private_key_to_pem",
     "public_key_to_pem",
     "seal_event",
+    "sign_config_bundle",
     "verify_chain",
+    "verify_config_bundle",
     "verify_hitl_token",
 ]

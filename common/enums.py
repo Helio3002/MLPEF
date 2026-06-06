@@ -97,6 +97,7 @@ class DenyReasonCode(StrEnum):
 
     # --- cross-cutting / fail-closed ---
     CONFIG_UNAVAILABLE = "config_unavailable"
+    CONFIG_UNTRUSTED = "config_untrusted"
     IDENTITY_UNRESOLVED = "identity_unresolved"
     AUDIT_FAILURE = "audit_failure"
     TIMEOUT = "timeout"
