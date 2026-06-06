@@ -156,7 +156,7 @@ defense-in-depth stack.
 | R-27 | Entropy-based secret detection can over-redact legitimate high-entropy data (hashes, IDs) — false positives. | LOW | Tunable `secret_entropy_threshold`; explicit pattern matches run first; document. | Accepted |
 | R-28 | Audit is recorded *after* L3 execution, so a tool's external side effect occurs before its audit record is committed; if the audit write then fails, the call fails closed but the side effect already happened. | LOW–MEDIUM | Split into a pre-execution decision audit + post-execution outcome audit; the ephemeral sandbox bounds the blast radius meanwhile. | Open → P11 |
 | R-29 | The `docker-compose` stack ships **dev defaults**: `.env.example` carries placeholder passwords, and when `MLPEF_SAMPLE_AGENT_ID`/`_API_KEY` are set the seed creates a sample agent with a **fixed, reproducible credential** (demo convenience). | HIGH (ops) | `.env.example` flags every secret "change-me"; the fixed-credential path warns loudly at seed time and is opt-in (unset → random key shown once); never deploy the demo `.env`. Compose is a dev/demo harness, not a prod manifest. | Accepted + documented |
-| R-30 | The compose **proxy runs with the sandbox disabled** (`command_builder` returns None): L3/L4 are skipped, so in the default stack tool *execution* is not sandboxed/filtered — only L1/L2/L5 are exercised. Enabling real execution requires mounting the host `docker.sock` (or DinD), a **privileged** boundary. | MEDIUM | Default-off avoids shipping a privileged socket mount; document the trade-off. To enable: mount the socket on a hardened host, wire a real `DockerSandboxBackend` + `command_builder`, and prefer gVisor/Firecracker (R-5) over the raw daemon. | By design + documented |
+| R-30 | Enabling real L3/L4 execution requires the proxy to reach a Docker daemon; the provided overlay mounts the host `docker.sock`, a **privileged** boundary (host-root-equivalent). | MEDIUM | Default stays sandbox-**off** (no socket; only L1/L2/L5 run). Execution is now opt-in via `MLPEF_SANDBOX_ENABLED=true` + the `docker-compose.sandbox.yml` overlay, which wires the pre-warmed `DockerSandboxBackend` + real `command_builder` and hardens every container (read-only rootfs, caps dropped, no-new-privileges, non-root, default seccomp, network off). The host-socket mount is the residual: for production use a rootless/remote daemon, a dedicated sandbox host, or gVisor/Firecracker (R-5). | Opt-in + documented |
 | R-31 | The demo stack serves the admin UI and APIs over **plain HTTP** with no TLS, and `VITE_API_BASE_URL` is **baked into the UI bundle at build time**; bearer tokens and agent keys therefore traverse cleartext locally and the UI must be rebuilt to retarget the API. | MEDIUM | Terminate TLS at a reverse proxy / ingress in front of every service for anything beyond localhost; rebuild the UI per environment (or move to runtime config). Reinforces R-11 (token storage). | Open → deploy |
 
 ## 8. Change log
@@ -259,3 +259,12 @@ defense-in-depth stack.
   Env-gated (`MLPEF_NONCE_URL`); the in-process `InMemoryNonceStore` stays the
   single-instance default. Migration `0004_hitl_nonces`; covered by control-api
   endpoint tests (first-use vs replay, auth required).
+- **Hardening — R-30 (opt-in real sandbox):** the proxy entrypoint enables L3/L4
+  execution when `MLPEF_SANDBOX_ENABLED=true` — a pre-warmed `DockerSandboxBackend`
+  pool + the real `command_builder`, so `shell.exec` runs in a hardened, ephemeral
+  container and L4 filters its output. Shipped as an opt-in `docker-compose.sandbox.yml`
+  overlay that mounts the host Docker socket; the default stack stays sandbox-off and
+  socket-free (L1/L2/L5 only). The privileged host-socket mount remains the documented
+  residual (prefer rootless/remote Docker or gVisor/Firecracker, R-5). The L3/L4
+  components are already covered by the layer-3/4 unit + docker-integration tests and
+  the `bench_sandbox` harness.

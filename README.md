@@ -184,10 +184,27 @@ grant the tool in the UI (Policy Profiles → add `shell.exec` to `tool_allowlis
 — with the sandbox off the verdict is ALLOW with empty output (L3/L4 skipped).
 
 > **This is a dev/demo harness, not a production deployment.** Two deliberate
-> limitations: the proxy runs with the **sandbox disabled** — L3/L4 are skipped,
-> so only L1/L2/L5 enforce (THREAT_MODEL.md R-30) — and everything is plain HTTP
-> with demo secrets (R-29, R-31). Change every secret and front it with TLS for
-> anything real.
+> defaults: the proxy runs **sandbox-off** — L3/L4 are skipped, so only L1/L2/L5
+> enforce (opt in below; THREAT_MODEL.md R-30) — and everything is plain HTTP with
+> demo secrets (R-29, R-31). Change every secret and front it with TLS for anything
+> real.
+
+### Enabling tool execution (real sandbox)
+
+By default the proxy enforces L1/L2/L5 but does **not** execute tools (L3/L4 are
+skipped, no Docker needed). To actually run `shell.exec` in a hardened, ephemeral
+container and filter its output, layer in the opt-in overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
+```
+
+It sets `MLPEF_SANDBOX_ENABLED=true` and mounts the host Docker socket into the
+proxy. **That socket mount is privileged (host-root-equivalent) — use it only on a
+host you trust** (THREAT_MODEL.md R-30); for production prefer a rootless/remote
+daemon, a dedicated sandbox host, or gVisor/Firecracker. Grant `shell.exec` to the
+agent's profile, then the sample agent's `echo` runs for real and returns output
+(scanned by L4) instead of an empty allow.
 
 ### GitHub Codespaces / remote hosts
 

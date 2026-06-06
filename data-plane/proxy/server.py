@@ -14,14 +14,14 @@ proxy.server:app`). It assembles the real components:
     store instead (see THREAT_MODEL.md R-17: per-agent audit auth from a shared
     proxy is a known residual).
 
-**Demo limitation — the sandbox is disabled here.** The command builder returns
-``None`` for every tool, so L3/L4 are skipped and no tool actually executes code.
-Running real containers needs Docker-in-Docker / a mounted socket, which is a
-privileged setup we deliberately keep out of the default compose (THREAT_MODEL.md
-R-29). L1/L2/L5 — validation, the default-deny ABAC core, HITL token enforcement,
-and the unskippable audit — are fully live, which is what the end-to-end demo
-exercises. Wire a `DockerSandboxBackend` with a real socket + a `command_builder`
-to enable execution.
+**Sandbox is opt-in.** By default (`MLPEF_SANDBOX_ENABLED` unset/false) the command
+builder returns ``None`` for every tool, so L3/L4 are skipped and no tool executes
+code — L1/L2/L5 (validation, the default-deny ABAC core, HITL token enforcement,
+and the unskippable audit) are fully live, which is what the default demo
+exercises, and no Docker is required. Set `MLPEF_SANDBOX_ENABLED=true` (with a
+mounted Docker socket — e.g. the `docker-compose.sandbox.yml` overlay) to run
+`shell.exec` in a hardened, ephemeral container and filter its output (L3/L4).
+Mounting the host Docker socket is privileged — see THREAT_MODEL.md R-30.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ from layer5_audit import Auditor, AuditSink, HttpAuditSink
 from .config_cache import ConfigCache
 from .http_config import HttpConfigFetcher
 from .nonce_store import HttpNonceStore
-from .pipeline import Pipeline
+from .pipeline import CommandBuilder, Pipeline, default_command_builder
 from .proxy import Proxy
 
 
@@ -139,8 +139,31 @@ def _build_nonce_store() -> NonceStore:
 
 
 def _no_sandbox(_intent: Intent) -> list[str] | None:
-    """Demo command builder: never executes code (L3/L4 skipped). See module docstring."""
+    """Disabled-sandbox command builder: never executes code (L3/L4 skipped)."""
     return None
+
+
+def _build_sandbox() -> tuple[WarmPool, CommandBuilder]:
+    """Return the sandbox pool + command builder, gated by MLPEF_SANDBOX_ENABLED.
+
+    Disabled (default): a size-0 pool + a builder that returns None, so no tool
+    executes and Docker is never contacted. Enabled: a pre-warmed pool over the
+    Docker backend + the real command builder — requires a mounted Docker socket
+    (privileged; see the docker-compose.sandbox.yml overlay and THREAT_MODEL R-30).
+    """
+    if _env("MLPEF_SANDBOX_ENABLED", "false").lower() not in ("1", "true", "yes", "on"):
+        pool = WarmPool(DockerSandboxBackend(), image="alpine", limits=SandboxLimits(), size=0)
+        return pool, _no_sandbox
+
+    image = _env("MLPEF_SANDBOX_IMAGE", "alpine")
+    size = int(_env("MLPEF_SANDBOX_POOL_SIZE", "2"))
+    print(
+        f"[server] sandbox ENABLED: image={image} pool={size} — requires a mounted "
+        "Docker socket (privileged; see THREAT_MODEL R-30)",
+        file=sys.stderr,
+    )
+    pool = WarmPool(DockerSandboxBackend(), image=image, limits=SandboxLimits(), size=size)
+    return pool, default_command_builder
 
 
 def build_app() -> FastAPI:
@@ -156,16 +179,16 @@ def build_app() -> FastAPI:
         ttl_seconds=ttl_seconds,
     )
 
-    # Sandbox disabled for the demo: size-0 pool + a command builder that returns
-    # None means `backend.create` is never called, so Docker is never required.
-    pool = WarmPool(DockerSandboxBackend(), image="alpine", limits=SandboxLimits(), size=0)
+    # Sandbox is opt-in (MLPEF_SANDBOX_ENABLED). Disabled by default → size-0 pool +
+    # a no-op builder, so Docker is never contacted. Enabled → pre-warmed pool.
+    pool, command_builder = _build_sandbox()
 
     pipeline = Pipeline(
         public_key=public_key,
         nonce_store=_build_nonce_store(),
         sandbox_pool=pool,
         auditor=Auditor(_build_audit_sink()),
-        command_builder=_no_sandbox,
+        command_builder=command_builder,
         leeway_seconds=leeway_seconds,
     )
     proxy = Proxy(config_cache=cache, pipeline=pipeline)

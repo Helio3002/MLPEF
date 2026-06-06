@@ -1,0 +1,21 @@
+# Opt-in overlay that ENABLES real L3/L4 sandbox execution in the proxy.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up --build
+#
+# It mounts the host Docker socket into the proxy and flips MLPEF_SANDBOX_ENABLED,
+# so `shell.exec` runs in a hardened, ephemeral container (read-only rootfs, caps
+# dropped, no-new-privileges, non-root, network off) and L4 filters the output.
+#
+# !!! PRIVILEGED !!! Mounting /var/run/docker.sock gives the proxy control of the
+# host Docker daemon — effectively host root. Use only on a host you own and trust.
+# This is THREAT_MODEL.md R-30: prefer a rootless/remote daemon, a dedicated
+# sandbox host, or gVisor/Firecracker (R-5) for a real deployment. Kept OUT of the
+# default compose on purpose.
+services:
+  proxy:
+    environment:
+      MLPEF_SANDBOX_ENABLED: "true"
+      MLPEF_SANDBOX_IMAGE: alpine
+      MLPEF_SANDBOX_POOL_SIZE: "2"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
