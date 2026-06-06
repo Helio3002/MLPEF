@@ -191,18 +191,18 @@ grant the tool in the UI (Policy Profiles → add `shell.exec` to `tool_allowlis
 
 ### GitHub Codespaces / remote hosts
 
-The browser must reach the control-api directly, and `VITE_API_BASE_URL` is baked
-into the UI **at build time**. On Codespaces, point both at the forwarded URLs and
-make the control-api port **Public** (GitHub's private-port gateway strips the
-CORS headers), then rebuild:
+The admin UI's nginx reverse-proxies the control-api under `/api`, so the browser
+only ever talks to **one** origin (port 8081). That means no CORS and no baked-in
+API URL — it just works on a forwarded host. The only step:
 
-```bash
-# in .env — use your forwarded hostnames
-VITE_API_BASE_URL=https://<name>-8080.app.github.dev
-MLPEF_CORS_ORIGINS=https://<name>-8081.app.github.dev
+1. **Ports** tab → set port **8081** visibility to **Public**.
+2. Open the forwarded `…-8081.app.github.dev` URL and click GitHub's **Continue**
+   interstitial once (that cookie now also covers the proxied `/api` calls,
+   because they're same-origin).
 
-docker compose up --build     # --build is required: the API URL is compiled in
-```
+No rebuild and no env changes are needed for this — that's the point of routing
+the API through the UI's origin. (Port 8080 can stay Private; you'd only expose it
+to hit the raw control-api `/docs`.)
 
 ## Benchmarks
 
