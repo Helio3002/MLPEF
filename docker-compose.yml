@@ -105,12 +105,15 @@ services:
       # event to the authenticated agent (THREAT_MODEL.md R-17). If the demo key
       # is unset, the proxy falls back to stdout auditing automatically.
       MLPEF_AUDIT_URL: http://control-api:8080
-      MLPEF_AUDIT_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
+      # The proxy audits/consumes-nonces AS one agent identity (R-17). Defaults to
+      # the demo agent; set MLPEF_PROXY_AGENT_KEY in .env to your own agent's key
+      # so that agent's calls audit cleanly to the store.
+      MLPEF_AUDIT_AGENT_KEY: ${MLPEF_PROXY_AGENT_KEY:-${MLPEF_SAMPLE_AGENT_API_KEY:-}}
       # Shared single-use nonce ledger (R-2): HITL token nonces are consumed via
       # the control-plane so single-use holds across a scaled proxy fleet, not
       # just within one process. Adds a hop only on the (rare) HITL-token path.
       MLPEF_NONCE_URL: http://control-api:8080
-      MLPEF_NONCE_AGENT_KEY: ${MLPEF_SAMPLE_AGENT_API_KEY:-}
+      MLPEF_NONCE_AGENT_KEY: ${MLPEF_PROXY_AGENT_KEY:-${MLPEF_SAMPLE_AGENT_API_KEY:-}}
     ports:
       - "8090:8090"
     healthcheck:

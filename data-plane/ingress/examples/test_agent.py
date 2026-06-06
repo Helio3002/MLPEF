@@ -93,22 +93,43 @@ def _execute(
     return body
 
 
-def _await_profile_active(proxy: str, agent_id: str, key: str, *, timeout: float = 50.0) -> bool:
+def _await_profile_active(
+    proxy: str, agent_id: str, key: str, *, timeout: float = 50.0
+) -> tuple[bool, str]:
     """Poll a known-allowed call until it returns ALLOW, so we don't race the
-    proxy's config-cache TTL after reassigning the agent's profile."""
+    proxy's config-cache TTL after reassigning the agent's profile. Fails fast on
+    a credential mismatch (no point polling for 50s if the key is wrong)."""
     deadline = time.monotonic() + timeout
+    last = "no response"
     while time.monotonic() < deadline:
         try:
             body = _execute(
                 proxy, agent_id, key, tool="fs.read", action="fs.read",
                 resource="/work/_ready.txt", arguments={"path": "/work/_ready.txt"},
             )
-            if body.get("verdict") == "allow":
-                return True
-        except httpx.HTTPError:
-            pass
+            verdict, reason = body.get("verdict"), body.get("reason_code")
+            if verdict == "allow":
+                return True, ""
+            last = f"verdict={verdict} reason={reason}"
+            if reason == "identity_unresolved":
+                return False, (
+                    f"the proxy rejected the agent key for '{agent_id}' "
+                    "(identity_unresolved). The --agent-key must be THAT agent's "
+                    "key. Re-run without --agent-key to use the default (.env "
+                    "MLPEF_SAMPLE_AGENT_API_KEY), or pass --agent-id for the agent "
+                    "that owns this key."
+                )
+            if reason == "audit_failure":
+                return False, (
+                    "the proxy's audit write is failing for this agent "
+                    "(audit_failure). docker-compose binds the proxy's audit key to "
+                    "the demo agent (R-17) — test as 'sample-agent-demo', or point "
+                    "the proxy's MLPEF_AUDIT_AGENT_KEY at this agent's key."
+                )
+        except httpx.HTTPError as exc:
+            last = f"request error: {exc}"
         time.sleep(3.0)
-    return False
+    return False, f"timed out after {timeout:.0f}s ({last})"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -192,9 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print("[setup] waiting for the proxy config cache to pick up the new profile...")
-    if not _await_profile_active(proxy, agent_id, key):
-        print("FATAL: agent never became ALLOWed - proxy unreachable, or config cache TTL too "
-              "long. Check `docker compose ps` / proxy logs.", file=sys.stderr)
+    ready, why = _await_profile_active(proxy, agent_id, key)
+    if not ready:
+        print(f"FATAL: agent did not become ALLOWed - {why}", file=sys.stderr)
         _restore(control_api, ah, agent_id)
         return 2
 
