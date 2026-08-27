@@ -15,6 +15,10 @@ It has two planes:
 
 ## Documentation
 
+**New here? Start with [`SETUP.md`](SETUP.md), then [`GETTING_STARTED.md`](GETTING_STARTED.md).**
+
+- [`SETUP.md`](SETUP.md) — **beginner setup** — get MLPEF running from a clean start (~15 min), no prior knowledge assumed.
+- [`GETTING_STARTED.md`](GETTING_STARTED.md) — **guided walkthrough** — watch MLPEF block an agent, then allow it, and read the audit trail.
 - [`AGENT_SETUP.md`](AGENT_SETUP.md) — **connect any agent** (MCP / OpenAI / REST / in-process), with copy-paste config per framework.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — setup, configuration, adding agents, and production hardening.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — how it works end to end (the inside-out deep dive).
